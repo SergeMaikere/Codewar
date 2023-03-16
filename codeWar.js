@@ -17,7 +17,7 @@ const isEmptyRow = row => row.every( char => /^[\s]$/.test(char) );
 
 const isThisTheEnd = (end, pos) => pos.row === end.row && pos.col === end.col;
 
-const isNewPosition = (positions, newPos) => positions.every(oldPos => !deepEqual(oldPos, newPos));
+const isNewPosition = (positions, newPos) => positions.every(oldPos => oldPos !== newPos);
 
 const isWrongTurn = (grid, pos, newPos, oldPos, direction) => {
     if (!isPlus(grid, pos)) return false;
@@ -28,23 +28,25 @@ const isWrongTurn = (grid, pos, newPos, oldPos, direction) => {
     if (direction === 'west') return oldPos.col === pos.col + 1;
 }
 
-const deepEqual = (x, y) => {
-    const ok = Object.keys, tx = typeof x, ty = typeof y;
-    return x && y && tx === 'object' && tx === ty ? 
-    (ok(x).length === ok(y).length && ok(x).every(key => deepEqual(x[key], y[key])) ) :
-    (x === y);
-}
 
 const getStartPosition = (row, i) => {
     if (!/X/.test([...row].join())) return [];
 
     return row.reduce( 
         (acc, char, j) => { 
-            if (char === 'X') acc.push( {row: i, col: j} );
+            if (char === 'X') acc.push( `${i}.${j}` );
             return acc;
         }, [] 
     );
 }
+
+const parsePos = str => {
+    if (!str) return false;
+    const [ row, col] = str.split('.').map(num => Number(num));
+    return { row, col }
+}
+
+const simplifyPos = pos => `${pos.row}.${pos.col}`;
 
 const getNext = pos => (  
     {
@@ -57,26 +59,28 @@ const getNext = pos => (
 
 
 const findPath = (grid, parcours) => {
-    const pos = parcours[parcours.length - 1];
-    const oldPos = parcours[parcours.length - 2];
+    const pos = parsePos(parcours[parcours.length - 1]);
+    const oldPos = parsePos(parcours[parcours.length - 2]);
     const compas = getNext(pos);
 
-    if (isNorth(grid, pos) && isNewPosition(parcours, compas.north) && !isWrongTurn(grid, pos, compas.north, oldPos, 'north')) 
-        return compas.north;
-    if (isEast(grid, pos) && isNewPosition(parcours, compas.east) && !isWrongTurn(grid, pos, compas.east, oldPos, 'east')) 
-        return compas.east;
-    if (isSouth(grid, pos) && isNewPosition(parcours, compas.south) && !isWrongTurn(grid, pos, compas.south, oldPos, 'south')) 
-        return compas.south;
-    if (isWest(grid, pos) && isNewPosition(parcours, compas.west) && !isWrongTurn(grid, pos, compas.west, oldPos, 'west')) 
-        return compas.west;
+    if (isNorth(grid, pos) && isNewPosition(parcours, simplifyPos(compas.north)) && !isWrongTurn(grid, pos, compas.north, oldPos, 'north')) 
+        return simplifyPos(compas.north);
+    if (isEast(grid, pos) && isNewPosition(parcours, simplifyPos(compas.east)) && !isWrongTurn(grid, pos, compas.east, oldPos, 'east')) 
+        return simplifyPos(compas.east);
+    if (isSouth(grid, pos) && isNewPosition(parcours, simplifyPos(compas.south)) && !isWrongTurn(grid, pos, compas.south, oldPos, 'south')) 
+        return simplifyPos(compas.south);
+    if (isWest(grid, pos) && isNewPosition(parcours, simplifyPos(compas.west)) && !isWrongTurn(grid, pos, compas.west, oldPos, 'west')) 
+        return simplifyPos(compas.west);
 
     console.log('The line is faulty');
     return false;
 }
 
 const isParcourValide = (grid, end, parcours) => {
-    if (!parcours[parcours.length - 1]) return false;
-    if (isThisTheEnd(end, parcours[parcours.length - 1])) return true;
+    const pos = parsePos(parcours[parcours.length - 1]);
+    console.log({pos})
+    if (!pos) return false;
+    if (isThisTheEnd(end, pos)) return true;
 
     const curr = findPath(grid, parcours);
     console.log({end, parcours, curr});
@@ -91,7 +95,7 @@ const line = grid => {
 
     console.log({start});
     return start.length !== 2 ? false : 
-        ( !isParcourValide(grid, start[1], [start[0]]) ? isParcourValide(grid, start[0], [start[1]]) : true );
+        ( !isParcourValide(grid, start[1], [start[0]]) ? isParcourValide(grid, start[0], ([start[1]])) : true );
 }
 
 console.log(line(grid));
