@@ -64,6 +64,52 @@ class Atom {
     toString = () => `Atom(${this.element}.${this.id}${Object.keys(this.linkedTo).length > 0 ? ': ' + this.#formatLinkedTo() : ''})`;
 }
 
+
+class Branche {
+    constructor (length, _lastId = 0) {
+        this.length = length;
+        this.lastId = _lastId;
+        this.carbons = this.#setCarbons();
+    }
+
+    static pipe = (...fns) => args => fns.reduce((f, g) => g(f), args);
+
+    #setCarbons = () => Branche.pipe(
+        this.#setArrayOfCarbons,
+        this.#arrayToObject,
+        this.#linkCarbons
+    )([...Array(this.length)]);
+
+    #setArrayOfCarbons = arr => arr
+    .map( (a, i) => this.lastId + i + 1 )
+    .map( id => new Atom('C', id) );
+
+    #arrayToObject = arr => arr.reduce( 
+        (acc, atom, i) => {
+            acc[i] = atom;
+            return acc;
+        }, {} 
+    );
+    
+    #linkCarbons = myCarbons => Object.keys(myCarbons)
+    .map( i => this.#linkWithNext(i, myCarbons) )
+    .map( i => this.#objectToArray(i, myCarbons));
+
+    #linkWithNext = (key, obj) => {
+        if ( key < this.length - 1 ){            
+            obj[key].linkTo(obj[`${Number(key) + 1}`]);
+            obj[`${Number(key) + 1}`].linkTo(obj[key]);
+        }
+        return key;
+    }
+
+    #objectToArray = (key, obj) => obj[key];
+
+    getAllIds = () => this.carbons.map(c => c.id);
+
+    toString = () => `Branche of length ${this.length}, carbons : ${this.carbons.map(c => `C.${c.id}`).join(',')}`;
+}
+
 class Molecule {
     constructor (name = "") {
         this.name = name;
@@ -85,41 +131,14 @@ class Molecule {
     brancher = (...n) => n.forEach( br => this.#addNewBranche(br));
 }
 
-class Branche {
-    constructor (length, _lastId = 0) {
-        this.length = length;
-        this.lastId = _lastId;
-        this.carbons = this.#setCarbons();
-    }
 
-    #setCarbons = () => {
-        const myCarbons = [...Array(this.length)]
-        .map( (a, i) => this.lastId + i + 1 )
-        .map( id => new Atom('C', id) )
-        .reduce( 
-            (acc, atom, i) => {
-                acc[`${i}`] = atom;
-                return acc;
-            }, {} 
-        );
-        return this.#linkNewBranch(myCarbons);
-    }
-    
-    #linkNewBranch = myCarbons => Object.keys(myCarbons)
-    .map(
-        i => {
-            if ( i < this.length - 1 ){            
-                myCarbons[`${i}`].linkTo(myCarbons[`${Number(i) + 1}`]);
-                myCarbons[`${Number(i) + 1}`].linkTo(myCarbons[`${i}`]);
-            }
-            return i;
-        }
-    )
-    .map( i => myCarbons[i] );
-
-    getAllIds = () => this.carbons.map(c => c.id);
-
-    toString = () => `Branche of length ${this.length}, carbons : ${this.carbons.map(c => `C.${c.id}`).join(',')}`;
-}
+const m = new Molecule('sergium');
+// console.log(m.name)
+m.brancher(5, 7, 12);
+console.log(m.branches)
+console.log(m.atoms)
+console.log(m.branches[1].toString())
+console.log(m.branches[2].toString())
+console.log(m.branches[3].toString())
 
 
