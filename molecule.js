@@ -33,8 +33,6 @@ class Molecule {
 
     #addNewBrancheIds = () => this.atoms.C.concat(this.branches[this.branches.length - 1][0].getAllIds());
 
-    #linkNewBranchAtoms = () => this.branches[this.branches.length -1][0]
-
     #addNewBranche = length => {
         const atoms = this.atoms.C;
         this.branches.push([new Branche(length, this.atoms.C[this.atoms.C.length -1])]);
@@ -50,6 +48,15 @@ class Molecule {
     #replaceAtomInAtoms = (c, br, elt, id) => {
         this.atoms['C'] = this.atoms['C'].filter(carbonID => carbonID !== id);
         this.#addAtomToAtoms(elt, id);
+    }
+
+    #getNextIdOfElt = elt => this.atoms?.[elt]?.length + 1 || 1;
+
+    #setArrayOfAtoms = arrOfElt => arrOfElt.map( elt => new Atom(elt, this.#getNextIdOfElt(elt)) );
+
+    #linkArrayOfAtoms = arr => {
+        [...Array(arr.length)].forEach( (a, i) => i < arr.length - 1 && Helper.link(arr[i], arr[i + 1]) );
+        return arr;
     }
 
     brancher = (...n) => {
@@ -82,16 +89,24 @@ class Molecule {
         arrays.forEach(
             array => {
                 const [ c, br, elt ] = array;
-                const id = 
-                Helper.link(this.branches[br - 1][0].carbons[c - 1], new Atom(elt, this.atoms?.[elt]?.length + 1 || 1));
-                this.#addAtomToAtoms(elt, this.atoms?.[elt]?.length + 1 || 1);
+                const id = this.#getNextIdOfElt(elt);
+                Helper.link(this.branches[br - 1][0].carbons[c - 1], new Atom(elt, id));
+                this.#addAtomToAtoms(elt, id);
             }
         )
         return this;
     }
 
     addChaining = (...args) => {
-        
+        const [ c, br ] = args.splice(0, 2);
+
+        const chain = Helper.pipe(
+            this.#setArrayOfAtoms,
+            this.#linkArrayOfAtoms,
+            arr => arr.map( a => {this.#addAtomToAtoms(a.element, a.id); return a;} )
+        )(args)
+        Helper.link(this.branches[br - 1][0].carbons[c - 1], chain[0]);
+        console.log(chain)
     }
 }
 
@@ -156,10 +171,9 @@ class Atom {
     linkTo = atom => {
         if (!this.isLinkLegit(atom)) throw new Exception('Linkage is against the laws of physics');
         this.linkedTo[atom.element] ? this.linkedTo[atom.element].push(atom.id) : this.linkedTo[atom.element] = [atom.id];
-        
     }
 
-    isLinkLegit = atom => Object.keys(this.linkedTo).length + 1 < this.valence;
+    isLinkLegit = atom => Object.keys(this.linkedTo).length + 1 <= this.valence;
 
     #getHighestIdOfElt = elt => [...this.linkedTo[elt]].sort((a,b) => a>b).pop();
 
@@ -183,12 +197,14 @@ class Atom {
 
 
 const m = new Molecule('sergium');
-// console.log(m.name)
+console.log(m.name)
 m.brancher(5, 7, 12);
 m.bounder([2,1,3,2], [1,2,2,3]);
 m.mutate([2, 2, 'O'])
 m.add([5, 2, 'O'])
+m.addChaining(2, 3, "N", "P", "C", "Mg", "Br")
 console.log(m.branches)
+//console.log(m.branches[2][0].carbons)
 console.log(m.atoms)
 console.log(m.branches[0].toString())
 console.log(m.branches[1].toString())
