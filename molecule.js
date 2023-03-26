@@ -65,8 +65,8 @@ class Molecule {
 
     #getEltInFormula = (arrOfElt, elt) => arrOfElt.splice( arrOfElt.indexOf( arrOfElt.find(str => str.includes(elt)) ), 1 );
 
-    #addNewBranche = length => {
-        this.branches.push( new Branche([...Array(length)].map( el => 'C'), {...this.atoms}) );
+    #addNewBranch = length => {
+        this.branches.push( new Branch([...Array(length)].map( el => 'C'), {...this.atoms}) );
         this.atoms = Helper.getLastChain(this.branches).currAtoms;
     }
 
@@ -79,8 +79,8 @@ class Molecule {
 
     #mutateSingleCarbon = arr => {
         const [ c, br, elt ] = arr;
-        Helper.getChain(br, this.branches).add(c, br, elt, this.atoms)
-        this.addAtomToAtoms(elt, Helper.getAtom(c, br, this.branches).id, this.atoms);
+        Helper.getChain(br, this.branches).mutate(c, elt)
+        this.#replaceAtomInAtoms(c, elt, Helper.getAtom(c, br, this.branches).id);
     }
 
     #addSingleAtomToBranch = arr => {
@@ -136,7 +136,7 @@ class Molecule {
     brancher = (...n) => {
         this.#checkMoleculeIsLocked();
 
-        n.forEach( br => this.#addNewBranche(br));
+        n.forEach( br => this.#addNewBranch(br));
         return this;
     }
 
@@ -263,11 +263,11 @@ class Chain extends Molecule {
 
     totalWeight = () => this.atoms.reduce( (acc, a) => acc += a.weight, 0 );
 
-    toString = () => `Branche of length ${this.#arrOfElt.length}, elements : ${this.atoms.map(a => `${a.element}.${a.id}`).join(',')}`;
+    toString = () => `Branch of length ${this.#arrOfElt.length}, elements : ${this.atoms.map(a => `${a.element}.${a.id}`).join(',')}`;
 }
 
 
-class Branche extends Chain {
+class Branch extends Chain {
     constructor (arrOfElt, currAtoms) {
         super(arrOfElt, currAtoms);
     }
