@@ -26,7 +26,7 @@ class Molecule {
         this.name = name;
         this.molecularWeight = 0;
         this.formula = '';
-        this.branches = [];
+        this.branchs = [];
         this.chains = [];
         this.atoms = {};
         this.locked = false;
@@ -35,8 +35,8 @@ class Molecule {
     get name () { return this._name }
     set name (newValue) { this._name = newValue }
 
-    get branches () { return this._branches }
-    set branches (newValue) { this._branches = newValue }
+    get branchs () { return this._branchs }
+    set branchs (newValue) { this._branchs = newValue }
 
     get atoms () { return this._atoms }
     set atoms (newValue) { this._atoms = newValue }
@@ -46,7 +46,7 @@ class Molecule {
 
     get molecularWeight () { 
         this.#checkMoleculeIsUnlocked();
-        return this.#getTotalChainsWeight(this.branches) + this.#getTotalChainsWeight(this.chains);
+        return this.#getTotalChainsWeight(this.branchs) + this.#getTotalChainsWeight(this.chains);
     }
     set molecularWeight (newValue) { this._molecularWeight = newValue }
 
@@ -56,7 +56,17 @@ class Molecule {
     }
     set formula (newValue) { this._formula = newValue }
 
-    #setFormulaEltS = arrOfElt => arrOfElt.sort().map( elt => (`${elt}${this.atoms[elt].length}`) );
+    #isBranch = br => this.branchs.length >= br - 1;
+
+    #isAtom = (a, br) => this.#isBranch(br) ? Helper.getChain(br, this.branchs).atoms.length >= a - 1 : false; 
+
+    #isRightNumberOfArgument = (args, n) => args.length === n;
+
+    #isOutOfBound = arr => this.#isBranch(arr[1]) && this.#isAtom(arr[0], arr[1])
+
+    #isBounderValid = args => [ args.splice(0,2), args ].every( arr => this.#isOutOfBound(arr) );
+
+    #setFormulaEltS = arrOfElt => arrOfElt.sort().map( elt => (`${elt}${this.atoms[elt].length > 1 ? this.atoms[elt].length : '' }`) );
 
     #orderFormulaElt = arrOfElt => {
         const CHO = ['C', 'H', 'O'].reduce( (acc, elt) => acc.concat(this.#getEltInFormula(arrOfElt, elt)), [] );
@@ -66,8 +76,8 @@ class Molecule {
     #getEltInFormula = (arrOfElt, elt) => arrOfElt.splice( arrOfElt.indexOf( arrOfElt.find(str => str.includes(elt)) ), 1 );
 
     #addNewBranch = length => {
-        this.branches.push( new Branch([...Array(length)].map( el => 'C'), {...this.atoms}) );
-        this.atoms = Helper.getLastChain(this.branches).currAtoms;
+        this.branchs.push( new Branch([...Array(length)].map( el => 'C'), {...this.atoms}) );
+        this.atoms = Helper.getLastChain(this.branchs).currAtoms;
     }
 
     #addNewChain = arrOfElt => this.chains.push( new Chain(arrOfElt, {...this.atoms}) );
@@ -78,15 +88,18 @@ class Molecule {
     }
 
     #mutateSingleCarbon = arr => {
+        if ( !this.#isRightNumberOfArgument([...arr], 3) || 
+            !this.#isOutOfBound([...arr].splice(0, 2)) ) throw new Exception('Invalid Entry');
+
         const [ c, br, elt ] = arr;
-        Helper.getChain(br, this.branches).mutate(c, elt)
-        this.#replaceAtomInAtoms(c, elt, Helper.getAtom(c, br, this.branches).id);
+        Helper.getChain(br, this.branchs).mutate(c, elt)
+        this.#replaceAtomInAtoms(c, elt, Helper.getAtom(c, br, this.branchs).id);
     }
 
     #addSingleAtomToBranch = arr => {
         const [ c, br, elt ] = arr;
-        Helper.getChain(br, this.branches).add(c, br, elt, this.atoms)
-        this.addAtomToAtoms(elt, Helper.getAtom(c, br, this.branches).id, this.atoms);
+        Helper.getChain(br, this.branchs).add(c, br, elt, this.atoms)
+        this.addAtomToAtoms(elt, Helper.getAtom(c, br, this.branchs).id, this.atoms);
     }
 
     #updateAtoms = ch => this.atoms = ch.currAtoms;
@@ -99,9 +112,13 @@ class Molecule {
         if ( !this.locked ) throw new Exception('UnlockedMolecule');
     }
 
+
     #boundChain = arr => {
+        if ( !this.#isBounderValid([...arr]) || 
+            !this.#isRightNumberOfArgument([...arr], 4) ) throw new Exception('Invalid Entry');
+
         const [a1, br1, a2, br2] = arr;
-        this.link(Helper.getAtom(a1, br1, this.branches), Helper.getAtom(a2, br2, this.branches));
+        this.link(Helper.getAtom(a1, br1, this.branchs), Helper.getAtom(a2, br2, this.branchs));
     }
 
     #toogleLocked = () => this.locked = !this.locked;
@@ -166,7 +183,7 @@ class Molecule {
 
         const [ c, br ] = args.splice(0, 2);
         this.#addNewChain( args );
-        this.link(Helper.getAtom(c, br, this.branches), Helper.getLastChain(this.chains).atoms[0]);
+        this.link(Helper.getAtom(c, br, this.branchs), Helper.getLastChain(this.chains).atoms[0]);
         this.#updateAtoms( Helper.getLastChain(this.chains) )
         return this;
     }
@@ -174,7 +191,7 @@ class Molecule {
     closer = () => {
         this.#checkMoleculeIsLocked();
 
-        this.#hydrate(this.branches);
+        this.#hydrate(this.branchs);
         this.#hydrate(this.chains);
         this.#toogleLocked();
         return this;
@@ -183,7 +200,7 @@ class Molecule {
     unlock = () => {
         this.#checkMoleculeIsUnlocked();
 
-        this.#dehydrate(this.branches);
+        this.#dehydrate(this.branchs);
         this.#dehydrate(this.chains);
         this.#toogleLocked();
         return this;
@@ -331,6 +348,11 @@ class Atom {
 
     #isSameAtom = atom => atom.id === this.id && atom.element === this.element;
 
+    #isElement = elt => {
+        if (Atom.VALID_ATOMS[elt]) return elt;  
+        throw new Exception('Unrecognized element');
+    }
+
     #getHighestIdOfElt = elt => [...this.linkedTo[elt]].sort((a,b) => a>b).pop();
 
     #formatLinkedToElt = arrOfElt => arrOfElt.map( elt => `${elt}${this.#getHighestIdOfElt(elt)}` );
@@ -343,15 +365,14 @@ class Atom {
 
     #formatLinkedTo = () => Helper.pipe( this.#formatLinkedToElt, this.#moveHToLastPos )(Object.keys(this.linkedTo)).join(',');
 
-    #isElement = elt => {
-        if (Atom.VALID_ATOMS[elt]) return elt;  
-        throw new Exception('Unrecognized element');
-    }
 
     toString = () => `Atom(${this.element}.${this.id}${Object.keys(this.linkedTo).length > 0 ? ': ' + this.#formatLinkedTo() : ''})`;
 }
 
 
-
-
+const m = new Molecule('sergium');
+console.log(m.name)
+m.brancher(8).closer();
+console.log(m.formula)
+console.log(m.molecularWeight)
 
