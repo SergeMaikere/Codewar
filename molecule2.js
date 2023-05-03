@@ -16,6 +16,8 @@ class H {
 
     static isAtom = a => a.element !== 'Null' && a.id !== 0
 
+    static isArrOfEltValid = arrOfElt => arrOfElt.every( elt => Atom.isAtomValid(elt) )
+
     static isBranch = (branchs, id) => Array.isArray(branchs[id])
 
     static isCorrectNumberOfArgs = (n, args) => args.length === n
@@ -55,13 +57,19 @@ class H {
 class AtomsOfMolecule {
     constructor () {
         this.atoms = []
+        this.atomIndex = {}
     }
 
-    add = atom => this.atoms.push(atom)
+    add = atom => {
+        this.#addToAtomIndex(atom)
+        this.atoms.push(atom)
+    }
+
+    #addToAtomIndex = a => a.element in this.atomIndex ? this.atomIndex[a.element].push(a.id) : this.atomIndex[a.element] = [ a.id ]
 
     remove = (elt, id) => this.atoms = [...this.atoms].filter( a => a.elt !== elt && a.id !== id )
 
-    findPreviousSameElt = a => this.getAtom( a.element, a.id - 1 )
+    findPreviousSameElt = a => [...this.atomIndex?.[a.element]].pop() || new NullAtom()
 
     findPreviousInLine = () => this.atoms[this.atoms.length - 2]
 
@@ -103,6 +111,20 @@ class LinksOfAtom {
     add = (elt, id) => this.links[elt] ? this.links[elt].push(id) : this.links[elt] = [id]
 
     remove = (elt, id) => this.links[elt] = [...this.links[elt]].filter( linkedId => id !== linkedId  )
+}
+
+class Validation {
+
+    constructor (_validations) {
+        this.validation = _validations
+    }
+
+    #isInputValid = input => this.validation.every( f => f(input) )
+
+    checkValidation = input => { 
+        if (!this.#isInputValid(input)) throw new Exception('Invalid Input') 
+    }
+
 }
 
 class Molecule {
@@ -174,7 +196,7 @@ class Molecule {
     }
 
     addChain = (...n) => {
-        const addChain = new addChainCommand(this.chains, this.atoms, this.branchs)
+        const addChain = new AddChainCommand(this.chains, this.atoms, this.branchs)
             try {
                 addChain.execute(n)
             } catch(e) {
@@ -183,6 +205,8 @@ class Molecule {
             }
         return this
     }
+
+
 }
 
 class AddBranchCommand {
@@ -191,14 +215,10 @@ class AddBranchCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.branch = [{}]
-        this.validation = [ H.isIntBtOrEq1 ]
+        this.validation = new Validation([ H.isIntBtOrEq1 ])
     }
 
-    isInputValid = input => this.validation.every( f => f(input) )
-
-    createAtom = (elt, a, i) => new Atom(elt, this.atoms.getLastIdOfElt(elt) + 1)
-
-    createCarbon =  H.curry( this.createAtom )('C')
+    createAtom = () => new Atom('C', this.atoms.getLastIdOfElt('C') + 1)
 
     addToAtoms = (a, i) => {
         this.atoms.add(a); 
@@ -231,7 +251,7 @@ class AddBranchCommand {
 
     handleAddingBranch = arr => {
         H.pipe(
-            H.map( this.createCarbon ),
+            H.map( this.createAtom ),
             H.map( this.addToAtoms ),
             H.map( this.addToBranch ),
             H.map( this.linkBranchAtoms ),
@@ -240,7 +260,7 @@ class AddBranchCommand {
     }
 
     execute = length => {
-        if ( !this.isInputValid(length) ) { throw new Exception('Invalid arguments') }
+        this.validation.checkValidation(length)
 
         this.handleAddingBranch( [...Array(length)] )
         this.addToBranchs()
@@ -259,6 +279,7 @@ class LinkBranchsCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.atomIds = []
+        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(4), H.isArray] )
     }
 
     #findAtoms = arr => [arr.splice(0, 2), arr].map( args => this.atoms.getAtom('C', this.branchs?.[args[1]]?.[args[0]].id) )
@@ -272,13 +293,16 @@ class LinkBranchsCommand {
 
     #linkBranchAtoms = arr => H.linkAtoms(arr[0], arr[1])
 
-    #removeLink = () => this.atomIds
+    #removeLink = () => {
+        if (this.atomIds.length !== 2) return
+
+        this.atomIds
         .map( atomId => this.atoms.getAtom('C', atomId) )
         .forEach( (a, i) => a.linkedTo.remove('C', this.atomIds[ i === 0 ? 1 : 0 ]) )
+    }
 
     execute = arr => {
-        if( !H.isCorrectNumberOfArgs(4, arr), !H.isArray(arr) ) { throw new Exception('Invalid arguments') }
-
+        this.validations.checkValidation(arr)
         H.pipe( 
             this.#findAtoms, 
             this.#checkAtoms, 
@@ -287,16 +311,14 @@ class LinkBranchsCommand {
         )(arr)
     }
 
-    undo = arr => {
-        if( H.isCorrectNumberOfArgs(3, arr) || H.isArray(arr) ) return
-        this.#removeLink();
-    }
+    undo = arr => this.#removeLink()
 }
 
 class MutateCarbonCommand {
     constructor (branchs, atoms) {
         this.branchs = branchs
         this.atoms = atoms
+        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(3), H.isArray] )
     }
 
     #checkAtomExists = c => {
@@ -320,19 +342,13 @@ class MutateCarbonCommand {
     #updateAtomsLinkedTo = (eltToAdd, eltToRemove, c) => {
         for (let key in c.linkedTo.links) {
             for (const id of c.linkedTo.links[key]) {
-                this.#removeLinkToThisAtom(this.atoms.getAtom(key, id), eltToRemove, c.id)
-                this.#addLinkToThisAtom(this.atoms.getAtom(key, id), eltToAdd, c.id)
+                this.atoms.getAtom(key, id).linkedTo.remove(eltToRemove, c.id)
+                this.atoms.getAtom(key, id).linkedTo.add(eltToAdd, c.id)
             }
         }
     }
 
-    #removeLinkToThisAtom = (a, elt, id) => a.linkedTo.remove(elt, id)
-
-    #addLinkToThisAtom = (a, elt, id) => a.linkedTo.add(elt, id)
-
-    execute = arr => {
-        if( !H.isCorrectNumberOfArgs(3, arr) || !H.isArray(arr) ) { throw new Exception('Invalid arguments') }
-
+    #handleMutation = arr => {
         const [c, b, elt] = arr
         H.pipe(
             this.#checkAtomExists,
@@ -342,15 +358,24 @@ class MutateCarbonCommand {
         )(this.atoms.getAtom('C', this.branchs?.[b]?.[c].id))
     }
 
-    undo = arr => {
-        if( H.isCorrectNumberOfArgs(3, arr) || H.isArray(arr) ) return
-
+    #reverseMutation = arr => {
         const [c, b, elt] = arr
         if ( !H.isAtom(this.atoms.getAtom(elt, this.branchs?.[b]?.[c].id)) ) return
+
         H.pipe( 
             H.curry(this.#mutateCarbon)('C'), 
             H.curry(this.#updateAtomsLinkedTo)('C', elt) 
         )(this.atoms.getAtom(elt, this.branchs?.[b]?.[c].id))
+    }
+
+    execute = arr => {
+        this.validations.checkValidation(arr)
+        this.#handleMutation(arr)
+    }
+
+    undo = arr => {
+        if ( !this.validations.isInputValid(arr) ) return
+        this.#reverseMutation(arr)
     }
 }
 
@@ -359,6 +384,7 @@ class AddAtomCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.id = 0
+        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(3), H.isArray] )
     }
 
     #checkAtomExists = a => {
@@ -380,9 +406,7 @@ class AddAtomCommand {
 
     #removeFromAtoms = a => this.atoms.remove(a)
 
-    execute = arr => {
-        if( !H.isCorrectNumberOfArgs(3, arr) || !H.isArray(arr) ) { throw new Exception('Invalid arguments') }
-
+    #handleAddition = arr => {
         const [ c, b, elt ] = arr
         H.pipe(
             this.#checkAtomExists,
@@ -392,9 +416,7 @@ class AddAtomCommand {
         )(this.atoms.getAtom('C', this.branchs?.[b]?.[c].id))
     }
 
-    undo = arr => {
-        if( H.isCorrectNumberOfArgs(3, arr) || H.isArray(arr) ) return
-
+    #reverseAddition = arr => {
         const [c, b, elt] = arr
         const [carbon, atom] = [this.atoms.getAtom('C', this.branchs?.[b]?.[c].id), this.atoms.getAtom(elt, this.id)]
 
@@ -402,17 +424,29 @@ class AddAtomCommand {
         this.#removeNewElementFromCarbonLinks(elt, this.id, carbon)
         this.#removeFromAtoms(atom)
     }
+
+    execute = arr => {
+        this.validations.checkValidation(arr)
+        this.#handleAddition(arr)
+    }
+
+    undo = arr => {
+        if( !this.validations.isInputValid(arr) ) return
+        this.#reverseAddition(arr)
+    }
 }
 
-class addChainCommand extends AddBranchCommand {
+class AddChainCommand extends AddBranchCommand {
     constructor (branchs, atoms, cBranchs) {
         super(branchs, atoms)
         this.cBranchs = cBranchs
-        this.validation = [
-            H.isArray,
-            H.validationWithFilteredInput(this.filterPos, H.isAtom),
-            H.validationWithFilteredInput(this.filterElements, this.isArrOfEltValid)
-        ]
+        this.validations = new Validation(
+            [
+                H.isArray,
+                H.validationWithFilteredInput(this.filterPos, H.isAtom),
+                H.validationWithFilteredInput(this.filterElements, H.isArrOfEltValid)
+            ]
+        )
     }
 
     filterPos = arr => {
@@ -422,19 +456,9 @@ class addChainCommand extends AddBranchCommand {
 
     filterElements = arr => [...arr].splice(2)
 
-    isArrOfEltValid = arrOfElt => arrOfElt.every( elt => Atom.isAtomValid(elt) ) 
+    createAtom = elt => new Atom(elt, this.atoms.getLastIdOfElt(elt) + 1)
 
     success = a => console.log(`Atom ${a.element} was created with id ${a.id} in chain ${this.branchs.length}`)
-
-    handleAddingBranch = arr => {
-        H.pipe(
-            H.map( this.createAtom ),
-            H.map( this.addToAtoms ),
-            H.map( this.addToBranch ),
-            H.map( this.linkBranchAtoms ),
-            H.forEach( this.success )
-        )(arr)
-    }
 
     linkToCarbon = pos => {
         const [ c, x ] = [ 
@@ -444,8 +468,7 @@ class addChainCommand extends AddBranchCommand {
         H.linkAtoms( c, x ) 
     }
     execute = arr => {
-        if ( !this.isInputValid(arr) ) { throw new Exception('Invalid arguments') }
-        
+        this.validations.checkValidation(arr)
         const [ pos, elements ] = [ arr.splice(0, 2), arr]
         this.handleAddingBranch(elements)
         this.linkToCarbon(pos)
@@ -544,52 +567,23 @@ class Atom {
     toString = () => `Atom(${this.element}.${this.id}${Object.keys(this.linkedTo).length > 0 ? ': ' + this.#formatLinkedTo() : ''})`
 }
 
-let biotin = new Molecule('biotin')
-biotin.brancher(14,1,1)
-biotin.bounder([2,1,1,2],
-               [10,1,1,3],
-               [8,1,12,1], [7,1,14,1])
-biotin.mutate( [1,1,'O'], [1,2,'O'], [1,3,'O'],
-               [11,1,'N'], [9,1,'N'], [14,1,'S'])
-biotin.add([6,1,'H']).addChain(3, 1, "N", "C", "C", "Mg", "Br")
-// // biotin.closer()
+// let biotin = new Molecule('biotin')
+// biotin.brancher(14,1,1)
+// biotin.bounder([2,1,1,2],
+//                [10,1,1,3],
+//                [8,1,12,1], [7,1,14,1])
+// biotin.mutate( [1,1,'O'], [1,2,'O'], [1,3,'O'],
+//                [11,1,'N'], [9,1,'N'], [14,1,'S'])
+// biotin.add([6,1,'H']).addChain(3, 1, "N", "C", "C", "Mg", "Br")
+// // // biotin.closer()
 
-// console.log(biotin)
-biotin.atoms.atoms.forEach( 
-    a => {
-        console.log(a.toString())
-        console.log(a.linkedTo.links)
-        console.log('_____________________')
-        console.log('')
-    }
-)
+// // console.log(biotin)
+// biotin.atoms.atoms.forEach( 
+//     a => {
+//         console.log(a.toString())
+//         console.log(a.linkedTo.links)
+//         console.log('_____________________')
+//         console.log('')
+//     }
+// )
 
-// The clue for step 2 is:
-// Does this one take the form of a magical creature, or perhaps he is just a housecat. As clever as his owner? Revelio!
-// 
-// The clue for step 3 is:
-// This biography of the irrational may help if lost at sea with an Indian cat.
-// 
-// The clue for step 4 is:
-// A matriarchal-sounding cat tours Japan in these moving diaries.
-// 
-// The clue for step 5 is:
-// A marsupial's classic that features
-// Some useful and talented creatures.
-// How poetic!
-// 
-// Step: #6
-// The boss has a cocktail and a demonic, chess-playing cat in this Soviet satire.
-// 
-// The clue for step 7 is:
-// Miscellaneous relations of this tomcat roam the forests of Lancre.
-// 
-// The clue for step 8 is:
-// Verbing weirds language. Do we need to clue you in further?
-// NB For the sake of the quiz setters' sanity, collections have also been included in the valid answers for this one.
-// 
-// The clue for step 9 is:
-// It may help to start at the end of this eulc.
-// 
-// The clue for step 10 is:
-// No littering! Here, the very opposite is sought. Burrow away to discover the correct Tab for this saga in deepest Hampshire.
