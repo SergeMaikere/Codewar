@@ -6,7 +6,6 @@ class Exception extends Error {
 }
 
 class H {
-    static pipe = (...fns) => arg => fns.reduce( (f, g) => g(f), arg )
 
     static linkAtoms = (a1, a2) => {
         if ( ![a1, a2].every( H.isAtom ) ) return;
@@ -25,6 +24,12 @@ class H {
     static isArray = arr => Array.isArray(arr)
 
     static isIntBtOrEq1 = n => Number.isInteger(n) && n >= 1
+    
+    static validateInput = (filter, condition, input) => condition( filter(input) )
+
+    static validationWithFilteredInput = (filter, condition) => H.curry(H.validateInput)(filter, condition)
+
+    static pipe = (...fns) => arg => fns.reduce( (f, g) => g(f), arg )
 
     static map = f => function* (iterator) { 
         let i = 0
@@ -44,41 +49,48 @@ class H {
         return curried
     }
 
-    static validateInput = (filter, condition, input) => condition( filter(input) )
+    static findLast = arr => arr[ arr.length - 1 ]
 
-    static validationWithFilteredInput = (filter, condition) => H.curry(H.validateInput)(filter, condition)
-
-    static logger = (...x) => {
-        for (n in x) console.log(n)
+    static logger = x => {
+        console.log(x)
         return x
     }
 }
 
 class AtomsOfMolecule {
     constructor () {
-        this.atoms = []
+        this.safe = []
         this.atomIndex = {}
     }
 
     add = atom => {
         this.#addToAtomIndex(atom)
-        this.atoms.push(atom)
+        this.safe.push(atom)
     }
 
     #addToAtomIndex = a => a.element in this.atomIndex ? this.atomIndex[a.element].push(a.id) : this.atomIndex[a.element] = [ a.id ]
 
-    remove = (elt, id) => this.atoms = [...this.atoms].filter( a => a.elt !== elt && a.id !== id )
+    #removeFromAtomIndex = (elt, id) => {
+        if ( !(elt in this.atomIndex) ) return
+        this.atomIndex[elt] = [...this.atomIndex[elt]].filter( eltId => eltId !== id )
+        if (this.atomIndex.length === 0) delete this.atomIndex[elt]
+    }
 
-    findPreviousSameElt = a => [...this.atomIndex?.[a.element]].pop() || new NullAtom()
+    remove = (elt, id) => {
+        this.#removeFromAtomIndex(elt, id)
+        this.safe = [...this.safe].filter( a => a.element !== elt || a.id !== id )
+    }
 
-    findPreviousInLine = () => this.atoms[this.atoms.length - 2]
+    findPreviousSameElt = a => a.element in this.atomIndex ? H.findLast(this.atomIndex[a.element]) : new NullAtom()
 
-    getLastIdOfElt = elt => [...this.atoms].filter( a => a.element === elt )?.pop()?.id || 0
+    findPreviousInLine = () => this.safe[this.safe.length - 2]
 
-    getAtom = (elt, id) => this.atoms.find( a => a.element === elt && a.id === id ) || new NullAtom()
+    getLastIdOfElt = elt => elt in this.atomIndex ? H.findLast(this.atomIndex?.[elt]) : 0
+
+    getAtom = (elt, id) => this.safe.find( a => a.element === elt && a.id === id ) || new NullAtom()
 
     toString = () => {
-        this.atoms.forEach(
+        this.safe.forEach(
             a => {
                 console.log(a.toString())
                 console.log(a.linkedTo.links)
@@ -102,15 +114,22 @@ class LinksOfAtom {
     set total (v) { this._total = v }
     get total () { return Object.keys(this.links).reduce( (acc, elt) => acc += this.links[elt].length, 0 ) }
 
-    isEmpty = elt => this.links[elt].length === 0
+    hasElement = elt => elt in this.links && this.links[elt].length !== 0
 
     getHighestIdOfLinkedElt = elt => [...this.links[elt]].sort((a,b) => a>b).pop()
 
-    hasLink = a => this.links?.[a.element]?.includes(a.id) 
+    getIndexOfElt = elt => Object.keys(this.links).indexOf(elt)
+
+    hasLink = a => a.element in this.links && this.links[a.element].includes(a.id) 
+
+    isLonely = () => JSON.stringify(this.links) === '{}'
 
     add = (elt, id) => this.links[elt] ? this.links[elt].push(id) : this.links[elt] = [id]
 
-    remove = (elt, id) => this.links[elt] = [...this.links[elt]].filter( linkedId => id !== linkedId  )
+    remove = (elt, id) => {
+        this.links[elt] = [...this.links[elt]].filter( linkedId => id !== linkedId  )
+        if (this.links[elt].length === 0) delete this.links[elt]
+    }
 }
 
 class Validation {
@@ -119,12 +138,11 @@ class Validation {
         this.validation = _validations
     }
 
-    #isInputValid = input => this.validation.every( f => f(input) )
+    isInputValid = input => this.validation.every( f => f(input) )
 
     checkValidation = input => { 
-        if (!this.#isInputValid(input)) throw new Exception('Invalid Input') 
+        if (!this.isInputValid(input)) throw new Exception('Invalid Input') 
     }
-
 }
 
 class Molecule {
@@ -133,6 +151,7 @@ class Molecule {
         this.name = _name
         this.branchs = [ [] ]
         this.chains = [ [] ]
+        this.hydrogens = [ ]
         this.formula = ''
         this.molecularWeight = 0
         this.atoms = new AtomsOfMolecule()
@@ -206,7 +225,17 @@ class Molecule {
         return this
     }
 
+    closer = () => {
+        const moleculeLock = new LockMoleculeCommand(this.hydrogens, this.atoms)
+        moleculeLock.execute()
+        return this
+    }
 
+    unlock = () => {
+        const moleculeUnlock = new LockMoleculeCommand(this.hydrogens, this.atoms)
+        moleculeUnlock.undo()
+        return this
+    }
 }
 
 class AddBranchCommand {
@@ -220,7 +249,7 @@ class AddBranchCommand {
 
     createAtom = () => new Atom('C', this.atoms.getLastIdOfElt('C') + 1)
 
-    addToAtoms = (a, i) => {
+    addToAtoms = a => {
         this.atoms.add(a); 
         return a
     }
@@ -231,15 +260,15 @@ class AddBranchCommand {
         )
     }
 
-    addToBranch = (a, i) => {
+    addToBranch = a => {
         this.branch.push({elt: a.element, id: a.id}); 
         return a
     }
 
     purgeBranch = () => this.branch = [{}]
 
-    linkBranchAtoms = (a, i) => {
-        if ( i > 0 ) H.linkAtoms(a, this.atoms.findPreviousInLine(a))
+    linkAtom = (a, i) => {
+        if (i > 0) H.linkAtoms(a, this.atoms.findPreviousInLine(a))
         return a
     }
 
@@ -254,7 +283,7 @@ class AddBranchCommand {
             H.map( this.createAtom ),
             H.map( this.addToAtoms ),
             H.map( this.addToBranch ),
-            H.map( this.linkBranchAtoms ),
+            H.map( this.linkAtom ),
             H.forEach( this.success )
         )(arr)
     }
@@ -291,7 +320,7 @@ class LinkBranchsCommand {
 
     #setAtomsIds = arr => arr.map( a => {this.atomIds.push(a.id); return a} )
 
-    #linkBranchAtoms = arr => H.linkAtoms(arr[0], arr[1])
+    #linkAtom = arr => H.linkAtoms(arr[0], arr[1])
 
     #removeLink = () => {
         if (this.atomIds.length !== 2) return
@@ -307,7 +336,7 @@ class LinkBranchsCommand {
             this.#findAtoms, 
             this.#checkAtoms, 
             this.#setAtomsIds, 
-            this.#linkBranchAtoms 
+            this.#linkAtom 
         )(arr)
     }
 
@@ -462,7 +491,7 @@ class AddChainCommand extends AddBranchCommand {
 
     linkToCarbon = pos => {
         const [ c, x ] = [ 
-            this.atoms.getAtom('C', this.cBranchs[pos[1]][pos[0]]), 
+            this.atoms.getAtom('C', this.cBranchs[pos[1]][pos[0]].id), 
             this.atoms.getAtom(this.branch[1].elt, this.branch[1].id ) 
         ]
         H.linkAtoms( c, x ) 
@@ -475,6 +504,69 @@ class AddChainCommand extends AddBranchCommand {
         this.addToBranchs()
         this.purgeBranch();
     }
+}
+
+class LockMoleculeCommand {
+
+    constructor (branch, atoms) {
+        this.hBranch = branch
+        this.atoms = atoms
+    }
+
+    createAtom = () => new Atom( 'H', this.atoms.getLastIdOfElt('H') + 1 )
+
+    addToAtoms = a => {this.atoms.add(a); return a}
+
+    addToBranch = (a, i) => {
+        this.hBranch.push(a.id); 
+        return a
+    }
+
+    linkAtom = (a, h) => { H.linkAtoms(a, h); return h }
+
+    closeSuccess = (a, h) => console.log(`H.${h.id} has been created and addded to ${a.element}.${a.id}`)
+
+    findHydrogen = id => this.atoms.getAtom('H', id)
+
+    removeAllLinks = h => {
+        for ( let key in h.linkedTo.links ) {
+            for ( let id of h.linkedTo.links[key] ) {
+                this.atoms.getAtom(key, id).linkedTo.remove(h.element, h.id)
+            }
+        }
+        return h
+    }
+
+    removeHydrogen = h => {
+        this.atoms.remove('H', h.id); 
+        return h
+    }
+
+    openSuccess = h => console.log(`H.${h.id} has been removed from molecule`)
+
+    execute = () => {
+        this.atoms.safe.forEach( 
+            a => {
+                H.pipe(
+                    H.map(this.createAtom),
+                    H.map(this.addToAtoms),
+                    H.map(this.addToBranch),
+                    H.map( H.curry(this.linkAtom)(a) ),
+                    H.forEach( H.curry(this.closeSuccess)(a) )
+                )( [...Array(a.getFreeSpots())] )
+            }
+        )
+    }
+
+    undo = () => {
+        H.pipe(
+            H.map(this.findHydrogen),
+            H.map(this.removeAllLinks),
+            H.map(this.removeHydrogen),
+            H.forEach(this.openSuccess)
+        )( [...this.hBranch] )
+    }
+
 }
 
 class NullAtom {
@@ -492,7 +584,31 @@ class Atom {
         this.valence = elt
         this.weight = elt
         this.linkedTo = new LinksOfAtom()
+        this.validations = new Validation(
+            [
+                H.isAtom,
+                this.#isValenceRespected,
+                this.#isDifferentAtom, 
+                this.#isNewLink
+            ]
+        )
     }
+
+    static VALID_ATOMS = {
+        'H': {valence: 1, weight: 1.0},    
+        'B': {valence: 3, weight: 10.8},    
+        'C': {valence: 4, weight: 12.0},     
+        'N': {valence: 3, weight: 14.0},
+        'O': {valence: 2, weight: 16.0},     
+        'F': {valence: 1, weight: 19.0},     
+        'Mg': {valence: 2, weight: 24.3},     
+        'P': {valence: 3, weight: 31.0},     
+        'S': {valence: 2, weight: 32.1},     
+        'Cl': {valence: 1, weight: 35.5},     
+        'Br': {valence: 1, weight: 80.0}
+    }
+
+    static isAtomValid = elt => elt in Atom.VALID_ATOMS
 
     get element () { return this._element }
     set element (v) {
@@ -512,78 +628,43 @@ class Atom {
         this._weight = Atom.VALID_ATOMS[v].weight
     }
 
-    static VALID_ATOMS = {
-        'H': {valence: 1, weight: 1.0},    
-        'B': {valence: 3, weight: 10.8},    
-        'C': {valence: 4, weight: 12.0},     
-        'N': {valence: 3, weight: 14.0},
-        'O': {valence: 2, weight: 16.0},     
-        'F': {valence: 1, weight: 19.0},     
-        'Mg': {valence: 2, weight: 24.3},     
-        'P': {valence: 3, weight: 31.0},     
-        'S': {valence: 2, weight: 32.1},     
-        'Cl': {valence: 1, weight: 35.5},     
-        'Br': {valence: 1, weight: 80.0}
-    }
-
-    static isAtomValid = elt => elt in Atom.VALID_ATOMS
-
-    #linkValidations = () => [
-        this.#isNotAtom,
-        this.#isValenceDefiant,
-        this.#isSameAtom, 
-        this.#isAlreadyLinked
-    ]
-
     linkTo = a => {
-        if (this.#linkValidations().some(f => f(a))) throw new Exception('InvalidBond');
+        if ( !this.validations.isInputValid(a) ) throw new Exception('InvalidBond');
         this.linkedTo.add(a.element, a.id);
     }
 
-    removeLinkTo = (elt, id) => this.linkedTo.remove(elt, id)
-
     getFreeSpots = () => this.valence - this.linkedTo.total
 
-    #isValenceDefiant = () => this.linkedTo.length + 1 > this.valence
+    #isValenceRespected = () => this.linkedTo.total + 1 <= this.valence
 
-    #isSameAtom = a => a.id === this.id && a.element === this.element
+    #isDifferentAtom = a => a.id !== this.id || a.element !== this.element
 
-    #isAlreadyLinked = a => this.linkedTo.hasLink(a)
-
-    #isNotAtom = a => !H.isAtom(a)
+    #isNewLink = a => !this.linkedTo.hasLink(a)
 
     #formatLinkedToElt = arrOfElt => arrOfElt
-    .filter( elt => !this.linkedTo.isEmpty(elt) )
-    .map( elt => `${elt}${this.linkedTo.getHighestIdOfLinkedElt(elt)}` )
+        .filter( elt => this.linkedTo.hasElement(elt) )
+        .map( elt => `${elt}${this.linkedTo.getHighestIdOfLinkedElt(elt)}` )
 
     #moveHToLastPos = arrOfElt => {
-        const indexOfH = Object.keys(this.linkedTo.links).indexOf('H')
+        const indexOfH = this.linkedTo.getIndexOfElt('H')
         if ( indexOfH !== -1 ) arrOfElt.push( arrOfElt.splice(indexOfH, 1)[0] )
         return arrOfElt;
     } 
 
     #formatLinkedTo = () => H.pipe( this.#formatLinkedToElt, this.#moveHToLastPos )(Object.keys(this.linkedTo.links)).join(', ')
 
-    toString = () => `Atom(${this.element}.${this.id}${Object.keys(this.linkedTo).length > 0 ? ': ' + this.#formatLinkedTo() : ''})`
+    toString = () => `Atom(${this.element}.${this.id}${ !this.linkedTo.isLonely() ? ': ' + this.#formatLinkedTo() : '' })`
 }
 
 // let biotin = new Molecule('biotin')
-// biotin.brancher(14,1,1)
+// biotin.brancher(14,14,14)
 // biotin.bounder([2,1,1,2],
 //                [10,1,1,3],
 //                [8,1,12,1], [7,1,14,1])
 // biotin.mutate( [1,1,'O'], [1,2,'O'], [1,3,'O'],
 //                [11,1,'N'], [9,1,'N'], [14,1,'S'])
-// biotin.add([6,1,'H']).addChain(3, 1, "N", "C", "C", "Mg", "Br")
-// // // biotin.closer()
+// biotin.add([6,1,'H']).addChain(3, 1, "N", "C", "C", "Mg", "Br").closer()
 
-// // console.log(biotin)
-// biotin.atoms.atoms.forEach( 
-//     a => {
-//         console.log(a.toString())
-//         console.log(a.linkedTo.links)
-//         console.log('_____________________')
-//         console.log('')
-//     }
-// )
-
+// biotin.atoms.toString()
+// biotin.unlock()
+// biotin.atoms.toString()
