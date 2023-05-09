@@ -89,6 +89,30 @@ class AtomsOfMolecule {
 
     getAtom = (elt, id) => this.safe.find( a => a.element === elt && a.id === id ) || new NullAtom()
 
+    getTotalWeight = () => this.safe.reduce( (total, a) => total += a.weight, 0 )
+
+    #sortAlphabeticaly = arrOfElt => arrOfElt.sort()
+
+    #setNumbersByAtoms = arrOfElt => arrOfElt.map( elt => `${elt}${this.atomIndex[elt].length}` )
+
+    #setCHOInFront = arrOfElt => {
+        const CHO =  [ 'C', 'H', 'O' ].reduce( 
+            (acc, cho) => acc.concat(this.#moveEltInFront(arrOfElt, cho)) , [] 
+        )
+        return CHO.concat(arrOfElt)
+    }
+
+    #moveEltInFront = (arrOfElt, elt) => arrOfElt.splice( arrOfElt.indexOf(arrOfElt.find(str => str.includes(elt))), 1 )
+
+    getFormula = () => {
+        return H.pipe(
+            this.#sortAlphabeticaly,
+            this.#setNumbersByAtoms,
+            this.#setCHOInFront,
+            arr => {console.log(arr); return arr}
+        )( Object.keys(this.atomIndex) ).join('')
+    }
+
     toString = () => {
         this.safe.forEach(
             a => {
@@ -157,6 +181,22 @@ class Molecule {
         this.atoms = new AtomsOfMolecule()
         this.locked = false
     }
+
+    get molecularWeight () {
+        if (!this.locked) { throw new Exception('Unlocked Molecule') }
+        return this.atoms.getTotalWeight()
+    }
+
+    set molecularWeight (newVal) { this._molecularWeight = newVal }
+
+     get formula () {
+        if (!this.locked) { throw new Exception('Unlocked Molecule') }
+        return this.atoms.getFormula()
+    }
+
+    set formula (newVal) { this._molecularWeight = newVal }
+
+    toggleClose = () => this.locked = !this.locked
 
     brancher = (...n) => {
         const addBranch = new AddBranchCommand(this.branchs, this.atoms)
@@ -228,12 +268,14 @@ class Molecule {
     closer = () => {
         const moleculeLock = new LockMoleculeCommand(this.hydrogens, this.atoms)
         moleculeLock.execute()
+        this.toggleClose()
         return this
     }
 
     unlock = () => {
         const moleculeUnlock = new LockMoleculeCommand(this.hydrogens, this.atoms)
         moleculeUnlock.undo()
+        this.toggleClose()
         return this
     }
 }
@@ -656,14 +698,16 @@ class Atom {
     toString = () => `Atom(${this.element}.${this.id}${ !this.linkedTo.isLonely() ? ': ' + this.#formatLinkedTo() : '' })`
 }
 
-// let biotin = new Molecule('biotin')
-// biotin.brancher(14,14,14)
-// biotin.bounder([2,1,1,2],
-//                [10,1,1,3],
-//                [8,1,12,1], [7,1,14,1])
-// biotin.mutate( [1,1,'O'], [1,2,'O'], [1,3,'O'],
-//                [11,1,'N'], [9,1,'N'], [14,1,'S'])
-// biotin.add([6,1,'H']).addChain(3, 1, "N", "C", "C", "Mg", "Br").closer()
+let biotin = new Molecule('biotin')
+biotin.brancher(14,14,14)
+biotin.bounder([2,1,1,2],
+               [10,1,1,3],
+               [8,1,12,1], [7,1,14,1])
+biotin.mutate( [1,1,'O'], [1,2,'O'], [1,3,'O'],
+               [11,1,'N'], [9,1,'N'], [14,1,'S'])
+biotin.add([6,1,'H']).addChain(3, 1, "N", "C", "C", "Mg", "Br", "O").closer()
+console.log(biotin.formula)
+console.log(biotin.molecularWeight)
 
 // biotin.atoms.toString()
 // biotin.unlock()
