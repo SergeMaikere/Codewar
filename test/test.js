@@ -1,5 +1,8 @@
 const { Molecule, InvalidBond } = require('../molecule2.js')
-const assert = require('chai').assert
+const chai = require('chai')
+const assert = chai.assert
+
+chai.config.truncateThreshold = 0;
 
 describe('Basic tests', () => {
     it('Constructors', () => {
@@ -241,29 +244,29 @@ const config = [
 
 describe('Invalid mutations and additions', () => {
 
-const config = [
-['Should fail when mutating a carbon with three atoms already linked to an oxygen',
-[3,1],
-[[2,1,1,2]],
-'mutate', [2,1,'O']],
+    const config = [
+        ['Should fail when mutating a carbon with three atoms already linked to an oxygen',
+        [3,1],
+        [[2,1,1,2]],
+        'mutate', [2,1,'O']],
 
-['Should fail when mutating a carbon with two double bonds to nitrogen',
-[3],
-[[1,1,2,1], [3,1,2,1]],
-'mutate', [2,1,'N']],
+        ['Should fail when mutating a carbon with two double bonds to nitrogen',
+        [3],
+        [[1,1,2,1], [3,1,2,1]],
+        'mutate', [2,1,'N']],
 
-['Should fail when adding a new hydrogen to a carbon with already 4 bonds',
-[3],
-[[1,1,2,1], [3,1,2,1]],
-'add', [2,1,'H']],
+        ['Should fail when adding a new hydrogen to a carbon with already 4 bonds',
+        [3],
+        [[1,1,2,1], [3,1,2,1]],
+        'add', [2,1,'H']],
 
 
-['Should fail when mutating an atom and then adding too much atoms on it',
-[3],
-[[1,1,2,1]],
-'mutadd', [[2,1,'N'], [2,1,'O']]],
+        ['Should fail when mutating an atom and then adding too much atoms on it',
+        [3],
+        [[1,1,2,1]],
+        'mutadd', [[2,1,'N'], [2,1,'O']]],
 
-]
+    ]
     config.forEach(([descript, branch, bonds, mutadd, inp]) => {
         it(descript, () => {
             const m = new Molecule('').brancher(...branch).bounder(...bonds)
@@ -277,3 +280,74 @@ const config = [
         })
     })
 })
+
+describe(
+    'Mutating, adding and valence numbers consistencies', () => {
+        it(
+            'Atom.toString() specs, part 2', () => {
+                let m = new Molecule()
+                .brancher(5)
+                .mutate([2,1,'N'])
+                .add([3,1,'Br'], [3,1,'O'])
+                .addChaining(4,1,'S','C','B')
+                .closer()
+
+                const links = m.atoms.filter( a => a.element !== 'H' ).map( a => a.toString() )
+                assert.deepEqual(
+                    links,
+                    [ 
+                        'Atom(C.1: N2,H,H,H)', 
+                        'Atom(N.2: C1,C3,H)', 
+                        'Atom(C.3: C4,O7,Br6,N2)', 
+                        'Atom(C.4: C3,C5,S8,H)', 
+                        'Atom(C.5: C4,H,H,H)', 
+                        'Atom(Br.6: C3)', 
+                        'Atom(O.7: C3,H)', 
+                        'Atom(S.8: C4,C9)', 
+                        'Atom(C.9: B10,S8,H,H)', 
+                        'Atom(B.10: C9,H,H)' 
+                    ],
+                    'Checking bonds for non hydrogens'
+                )
+            }
+        )
+    }
+)
+
+describe(
+    'Invalid mutations/additions and molecule integrity',
+    it(
+        'Should fail when chaining atoms after any monovalent atom', () => {
+            let m = new Molecule()
+            assert.throws( () => m.brancher(3).addChaining(3,1,'C','C','F','H'), InvalidBond)
+            let links = m.atoms.map( a => a.toString() )
+            assert.deepEqual(links, [ 'Atom(C.1: C2)', 'Atom(C.2: C1,C3)', 'Atom(C.3: C2)' ])
+        }
+    )
+)
+
+
+describe(
+    'Molecule integrity: keeps the valid arguments but does not execute those after the one raising an exception',
+    it(
+        'Invalid add command resulting in tetrachloromethane with valid operations', () => {
+            let m = new Molecule()
+            const func = () => m.brancher(1).add([1,1,'Cl'],[1,1,'Cl'],[1,1,'Cl'],[1,1,'Cl'],[1,1,'Cl'])
+            assert.throws(func, InvalidBond)
+            let links = m.atoms.map( a => a.toString() )
+            assert.deepEqual(links, [ 'Atom(C.1: Cl2,Cl3,Cl4,Cl5)', 'Atom(Cl.2: C1)', 'Atom(Cl.3: C1)', 'Atom(Cl.4: C1)', 'Atom(Cl.5: C1)' ])
+        }
+    )
+)
+
+describe(
+    'Behaviors about the unlock method',
+    it(
+        'Unlock properly a molecule, removing hydrogens and updating id numbers)',
+        () => {
+            let m = new Molecule().brancher(3).add([2,1,'H']).brancher(1).bounder([2,1,1,2]).closer().unlock()
+            const links = m.atoms.map( a => a .toString() )
+            assert.deepEqual(links, [ 'Atom(C.1: C2)', 'Atom(C.2: C1,C3,C4)', 'Atom(C.3: C2)', 'Atom(C.4: C2)' ])
+        }
+    )
+)
