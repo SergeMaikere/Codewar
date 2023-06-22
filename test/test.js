@@ -339,3 +339,15 @@ describe(
         }
     )
 )
+
+describe(
+    'Behaviors about the unlock method',
+    it(
+        'Unlock properly a molecule, removing hydrogens and updating id numbers)',
+        () => {
+            let m = new Molecule().brancher(3).add([2,1,'H']).brancher(1).bounder([2,1,1,2]).closer().unlock()
+            const links = m.atoms.map( a => a .toString() )
+            assert.deepEqual(links, [ 'Atom(C.1: C2)', 'Atom(C.2: C1,C3,C4)', 'Atom(C.3: C2)', 'Atom(C.4: C2)' ])
+        }
+    )
+)

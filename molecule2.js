@@ -139,6 +139,24 @@ class AtomsOfMolecule {
 
     getAtom = (elt, id) => this.safe.find( a => a.element === elt && a.id === id ) || new NullAtom()
 
+    setContinuousId = () => {
+        this.#setContinuousIdInSafe()
+        this.#resetAtomIndex()
+    } 
+
+    #setContinuousIdInSafe = () => this.safe = [...this.safe].map( 
+        (a, i) => {
+            a.id = i + 1
+            console.log({elt: a.element, id: a.id})
+            return a
+        } 
+    )
+
+    #resetAtomIndex = () => {
+        this.atomIndex = {}
+        this.safe.forEach( a => this.addToAtomIndex(a) )
+    }  
+
     getTotalWeight = () => this.safe.reduce( (total, a) => total += a.weight, 0 )
 
     #sortAlphabeticaly = arrOfElt => arrOfElt.sort()
@@ -559,11 +577,12 @@ class LockMoleculeCommand {
 
     undo = () => {
         H.pipe(
-            H.map(this.findHydrogen),
             H.map(this.removeAllLinks),
             H.map(this.removeHydrogen),
             H.forEach(this.openSuccess)
-        )( [...this.hBranch] )
+        )( [...this.atoms.safe].filter(a => a.element === 'H') )
+
+        this.atoms.setContinuousId()
     }
 }
 
@@ -704,7 +723,11 @@ class Molecule {
 
     #checkMoleculeIsUnLocked = () => { if (this.locked) {throw new LockedMolecule('Molecule must be unlocked first')} }
 
-    #checkIsBranchsEmpty = () => { if (this.branchs.every(branch => branch.length === 0)) {throw new EmptyMolecule('No branchs left')} }
+    #checkIsBranchsEmpty = () => { 
+        if ( this.branchs.every(branch => branch.length === 0) ) {
+            throw new EmptyMolecule('No branchs left')
+        } 
+    }
 
     brancher = (...n) => {
         this.#checkMoleculeIsUnLocked()
