@@ -40,6 +40,13 @@ class AtomNotInMolecule extends Error {
     }
 }
 
+class InvalidInput extends Error {
+    constructor(message) {
+        super(message);
+        this.name = this.constructor.name;
+    }
+}
+
 class H {
 
     static linkAtoms = (a1, a2) => {
@@ -210,6 +217,34 @@ class LinksOfAtom {
     }
 }
 
+class BranchsOfMolecule {
+    constructor () {
+        this.safe = [ [] ]
+        this.length = 0
+    }
+
+    get length () { return this.safe.length }
+    set length (newVal) { this._length = newVal }
+
+    add = b => this.safe.push(b)
+
+    removeLast = () => this.safe.pop()
+
+    getAtom = (branchIndex, atomIndex) => this.safe?.[branchIndex]?.[atomIndex]
+
+    removeEmptyBranches = () => this.safe = [...this.safe].filter( b => this.hasBranchLeaves(b) || b.length == 1 )
+
+    removeHydrogenFromBranchs = () => this.safe = [...this.safe].map( b => b.filter( a => a.elt !== 'H' || JSON.stringify(a) === '{}' ) )
+
+    hasBranchLeaves = b => b.every( a => !this.atomsManager.getAtom(a.elt, a.id).linkedTo.isLonely() )
+
+    checkIsMoleculeEmpty = () => { 
+        if ( this.safe.every(b => b.length === 0) ) {
+            throw new EmptyMolecule('No branchs left')
+        } 
+    }
+}
+
 class Validation {
 
     constructor (_validations) {
@@ -219,7 +254,7 @@ class Validation {
     isInputValid = input => this.validation.every( f => f(input) )
 
     checkValidation = input => { 
-        if (!this.isInputValid(input)) console.log('Invalid Input') 
+        if (!this.isInputValid(input)) { throw new InvalidInput('Unacceptable Input. Try again.') } 
     }
 }
 
@@ -257,9 +292,9 @@ class AddBranchCommand {
 
     success = a => console.log(`Atom ${a.element} was created with id ${a.id} in branch ${this.branchs.length}`)
 
-    addToBranchs = () => this.branchs.push(this.branch)
+    addToBranchs = () => this.branchs.add(this.branch)
 
-    removeFromBranchs = () => this.branchs.pop()
+    removeFromBranchs = () => this.branchs.removeLast() 
 
     handleAddingBranch = arr => {
         H.pipe(
@@ -293,7 +328,9 @@ class LinkBranchsCommand {
         this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(4), H.isArray] )
     }
 
-    #findAtoms = arr => [arr.splice(0, 2), arr].map( args => this.atoms.getAtom('C', this.branchs?.[args[1]]?.[args[0]]?.id) )
+    #findAtoms = arr => [arr.splice(0, 2), arr].map( 
+        args => this.atoms.getAtom('C', this.branchs.getAtom(args[1], args[0])?.id) 
+    )
 
     #checkAtoms = arr => { 
         if ( !arr.some( H.isAtom ) ) { throw new Exception('Atom is inexistant') }
@@ -371,7 +408,7 @@ class MutateCarbonCommand {
         return a
     }
 
-    #updateBranchs = (c, b, a) => { this.branchs[b][c].elt = a.element; return a }
+    #updateBranchs = (c, b, a) => { this.branchs.getAtom(b, c).elt = a.element; return a }
 
     #success = a => console.log( `C.${a.id} has been mutated into ${a.element}${a.id}` )
 
@@ -385,17 +422,17 @@ class MutateCarbonCommand {
             this.#updateAtomIndex,
             H.curry(this.#updateBranchs)(c, b),
             this.#success
-        )(this.atoms.getAtom('C', this.branchs?.[b]?.[c]?.id))
+        )(this.atoms.getAtom('C', this.branchs.getAtom(b, c)?.id))
     }
 
     #reverseMutation = arr => {
         const [c, b, elt] = arr
-        if ( !H.isAtom(this.atoms.getAtom(elt, this.branchs?.[b]?.[c]?.id)) ) return
+        if ( !H.isAtom(this.atoms.getAtom(elt, this.branchs.getAtom(b, c)?.id)) ) return
 
         H.pipe( 
             H.curry(this.#mutateCarbon)('C'), 
             H.curry(this.#updateAtomsLinkedTo)('C', elt) 
-        )(this.atoms.getAtom(elt, this.branchs?.[b]?.[c]?.id))
+        )(this.atoms.getAtom(elt, this.branchs.getAtom(b, c)?.id))
     }
 
     execute = arr => {
@@ -442,7 +479,6 @@ class MutateAtomId {
             this.#setNewIdInLinksOfAtoms
         )(new Atom(this.atom.element, this.newId))
     }
-
 }
 
 class AddAtomCommand {
@@ -474,10 +510,9 @@ class AddAtomCommand {
 
     #removeFromAtoms = a => this.atoms.remove(a)
 
-
     #handleAddition = arr => {
         const [ c, b, elt ] = arr
-        const branchAtom = this.branchs?.[b]?.[c]
+        const branchAtom = this.branchs.getAtom(b, c)
         H.pipe(
             this.#checkAtomExists,
             this.#setId,
@@ -489,7 +524,7 @@ class AddAtomCommand {
 
     #reverseAddition = arr => {
         const [c, b, elt] = arr
-        const [carbon, atom] = [this.atoms.getAtom('C', this.branchs?.[b]?.[c]?.id), this.atoms.getAtom(elt, this.id)]
+        const [carbon, atom] = [this.atoms.getAtom('C', this.branchs.getAtom(b, c)?.id), this.atoms.getAtom(elt, this.id)]
 
         if ( !H.isAtom(carbon) || !H.isAtom(atom) ) return
         this.#removeNewElementFromCarbonLinks(elt, this.id, carbon)
@@ -522,7 +557,7 @@ class AddChainCommand extends AddBranchCommand {
 
     filterPos = arr => {
         const pos = [...arr].splice(0, 2)
-        return this.atoms.getAtom('C', this.cBranchs?.[arr[1]]?.[arr[0]]?.id)
+        return this.atoms.getAtom('C', this.cBranchs.getAtom(arr[1], arr[0])?.id)
     }
 
     filterElements = arr => [...arr].splice(2)
@@ -532,7 +567,7 @@ class AddChainCommand extends AddBranchCommand {
 
     linkToCarbon = pos => {
         const [ c, x ] = [ 
-            this.atoms.getAtom('C', this.cBranchs[pos[1]][pos[0]].id), 
+            this.atoms.getAtom('C', this.cBranchs.getAtom(pos[1], pos[0]).id), 
             this.atoms.getAtom(this.branch[1].elt, this.branch[1].id ) 
         ]
         H.linkAtoms( c, x ) 
@@ -550,8 +585,9 @@ class AddChainCommand extends AddBranchCommand {
 
 class LockMoleculeCommand {
 
-    constructor (branch, atoms) {
-        this.hBranch = branch
+    constructor (hBranch, atoms, branchs) {
+        this.branchs = branchs
+        this.hBranch = hBranch
         this.atoms = atoms
     }
 
@@ -606,7 +642,7 @@ class LockMoleculeCommand {
             H.map(this.removeHydrogen),
             H.forEach(this.openSuccess)
         )( [...this.atoms.safe].filter(a => a.element === 'H') )
-
+        this.branchs.removeHydrogenFromBranchs()
         this.atoms.setContinuousId()
     }
 }
@@ -714,8 +750,9 @@ class Molecule {
 
     constructor (_name) {
         this.name = _name || ''
+        this.branchsManager = new BranchsOfMolecule()
         this.branchs = [ [] ]
-        this.chains = [ [] ]
+        this.chains = new BranchsOfMolecule()
         this.hydrogens = [ ]
         this.formula = ''
         this.molecularWeight = 0
@@ -742,13 +779,24 @@ class Molecule {
 
     set atoms (newVal) { this._atoms = newVal }
 
+    get branchs () { return this.branchsManager.safe }
+
+    set branchs (newVal) { this._branchs = newVal }
+
     #toggleClose = () => this.locked = !this.locked
 
     #checkMoleculeIsLocked = () => { if (!this.locked) {throw new UnlockedMolecule('Molecule must be locked first')} }
 
     #checkMoleculeIsUnLocked = () => { if (this.locked) {throw new LockedMolecule('Molecule must be unlocked first')} }
 
-    #checkIsBranchsEmpty = () => { 
+    #removeEmptyBranches = () => this.branchs = [...this.branchs].filter( branch => this.#hasBranchLeaves(branch) || branch.length == 1 )
+
+    #hasBranchLeaves = b => {
+        console.log({b})
+        return b.every( a => !this.atomsManager.getAtom(a.elt, a.id)?.linkedTo?.isLonely() )
+    }
+
+    #checkIsMoleculeEmpty = () => { 
         if ( this.branchs.every(branch => branch.length === 0) ) {
             throw new EmptyMolecule('No branchs left')
         } 
@@ -756,7 +804,7 @@ class Molecule {
 
     brancher = (...n) => {
         this.#checkMoleculeIsUnLocked()
-        const addBranch = new AddBranchCommand(this.branchs, this.atomsManager)
+        const addBranch = new AddBranchCommand(this.branchsManager, this.atomsManager)
         n.forEach( n => {
                 try {
                     addBranch.execute(n)
@@ -772,7 +820,7 @@ class Molecule {
 
     bounder = (...n) => { 
         this.#checkMoleculeIsUnLocked()
-        const linkBranchs = new LinkBranchsCommand(this.branchs, this.atomsManager)
+        const linkBranchs = new LinkBranchsCommand(this.branchsManager, this.atomsManager)
         n.forEach( n => {
                 try {
                     linkBranchs.execute(n)
@@ -788,7 +836,7 @@ class Molecule {
 
     mutate = (...n) => {
         this.#checkMoleculeIsUnLocked()
-        const mutateCarbon = new MutateCarbonCommand(this.branchs, this.atomsManager)
+        const mutateCarbon = new MutateCarbonCommand(this.branchsManager, this.atomsManager)
         n.forEach( n => {
                 try {
                     mutateCarbon.execute(n)
@@ -804,7 +852,7 @@ class Molecule {
 
     add = (...n) => {
         this.#checkMoleculeIsUnLocked()
-        const addAtom = new AddAtomCommand(this.branchs, this.atomsManager)
+        const addAtom = new AddAtomCommand(this.branchsManager, this.atomsManager)
         n.forEach( n => {
                 try {
                     addAtom.execute(n)
@@ -820,7 +868,7 @@ class Molecule {
 
     addChaining = (...n) => {
         this.#checkMoleculeIsUnLocked()
-        const addChain = new AddChainCommand(this.chains, this.atomsManager, this.branchs)
+        const addChain = new AddChainCommand(this.chains, this.atomsManager, this.branchsManager)
             try {
                 addChain.execute(n)
             } catch(e) {
@@ -833,7 +881,7 @@ class Molecule {
 
     closer = () => {
         this.#checkMoleculeIsUnLocked()
-        const moleculeLock = new LockMoleculeCommand(this.hydrogens, this.atomsManager)
+        const moleculeLock = new LockMoleculeCommand(this.hydrogens, this.atomsManager, this.branchsManager)
         moleculeLock.execute()
         this.#toggleClose()
         return this
@@ -841,12 +889,22 @@ class Molecule {
 
     unlock = () => {
         this.#checkMoleculeIsLocked()
-        const moleculeUnlock = new LockMoleculeCommand(this.hydrogens, this.atomsManager)
+        const moleculeUnlock = new LockMoleculeCommand(this.hydrogens, this.atomsManager, this.branchsManager)
         moleculeUnlock.undo()
+        this.#removeEmptyBranches()
+        this.#checkIsMoleculeEmpty()
         this.#toggleClose()
-        this.#checkIsBranchsEmpty()
         return this
     }
 }
 
 module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule }
+
+
+// let m = new Molecule()
+// .brancher(1,5)
+// .bounder([2,2,5,2], [4,2,1,1])
+// .mutate([1,1,'H'])
+// .closer()
+// .unlock()
+// .add([2,2,'P'])

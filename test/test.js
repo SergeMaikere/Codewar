@@ -355,3 +355,20 @@ describe(
         }
     )
 )
+
+// describe(
+//     'Behaviors about the unlock method',
+//     it(
+//         'Remove empty branches, after unlocking', () => {
+//             let f = () => new Molecule()
+//             .brancher(1,5)
+//             .bounder([2,2,5,2], [4,2,1,1])
+//             .mutate([1,1,'H'])
+//             .closer()
+//             .unlock()
+//             .add([2,2,'P'])
+
+//             assert.throws(f, )
+//         }
+//     )
+// )
