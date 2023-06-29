@@ -198,8 +198,8 @@ class LinksOfAtom {
         .forEach( linkedId => this.add(newElt, id) )
 
     updateId = (a, newId) => {
-        this.add(a.element, newId)
         this.remove(a.element, a.id)
+        this.add(a.element, newId)
     }
 
     add = (elt, id) => this.links[elt] ? this.links[elt].push(id) : this.links[elt] = [id]
@@ -430,7 +430,7 @@ class MutateAtomId {
     #setNewIdInLinksOfAtoms = a => {
         for (let key in a.linkedTo.links) {
             for (const id of a.linkedTo.links[key]) {
-                this.atoms.getAtom(key, id).linkedTo.updateId(a, this.newId)
+                this.atoms.getAtom(key, id).linkedTo.updateId(this.atom, this.newId)
             }
         }
     }
@@ -850,7 +850,3 @@ class Molecule {
 }
 
 module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule }
-
-let m = new Molecule().brancher(3).add([2,1,'H']).brancher(1).bounder([2,1,1,2]).closer().unlock()
-const links = m.atoms.map( a => a.toString() )
-console.log({links})
