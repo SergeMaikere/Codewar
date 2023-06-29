@@ -139,23 +139,7 @@ class AtomsOfMolecule {
 
     getAtom = (elt, id) => this.safe.find( a => a.element === elt && a.id === id ) || new NullAtom()
 
-    setContinuousId = () => {
-        this.#setContinuousIdInSafe()
-        this.#resetAtomIndex()
-    } 
-
-    #setContinuousIdInSafe = () => this.safe = [...this.safe].map( 
-        (a, i) => {
-            a.id = i + 1
-            console.log({elt: a.element, id: a.id})
-            return a
-        } 
-    )
-
-    #resetAtomIndex = () => {
-        this.atomIndex = {}
-        this.safe.forEach( a => this.addToAtomIndex(a) )
-    }  
+    setContinuousId = () => [...this.safe].forEach( (a, i) => new MutateAtomId(a, i+1, this ).mutateAtomId() ) 
 
     getTotalWeight = () => this.safe.reduce( (total, a) => total += a.weight, 0 )
 
@@ -202,16 +186,21 @@ class LinksOfAtom {
 
     isLonely = () => JSON.stringify(this.links) === '{}'
 
-    update = (oldElt, newElt, id) => {
+    updateElement = (oldElt, newElt, id) => {
         if (!this.links[oldElt]) return
 
-        this.#addAll(oldElt, newElt, id)
+        this.#addNewElt(oldElt, newElt, id)
         this.remove(oldElt, id)
     }
 
-    #addAll = (oldElt, newElt, id) => [...this.links[oldElt]]
+    #addNewElt = (oldElt, newElt, id) => [...this.links[oldElt]]
         .filter( linkedId => id === linkedId )
         .forEach( linkedId => this.add(newElt, id) )
+
+    updateId = (a, newId) => {
+        this.remove(a.element, a.id)
+        this.add(a.element, newId)
+    }
 
     add = (elt, id) => this.links[elt] ? this.links[elt].push(id) : this.links[elt] = [id]
 
@@ -370,7 +359,7 @@ class MutateCarbonCommand {
     #updateAtomsLinkedTo = (eltToAdd, eltToRemove, c) => {
         for (let key in c.linkedTo.links) {
             for (const id of c.linkedTo.links[key]) {
-                this.atoms.getAtom(key, id).linkedTo.update(eltToRemove, eltToAdd, c.id)
+                this.atoms.getAtom(key, id).linkedTo.updateElement(eltToRemove, eltToAdd, c.id)
             }
         }
         return c
@@ -384,7 +373,7 @@ class MutateCarbonCommand {
 
     #updateBranchs = (c, b, a) => { this.branchs[b][c].elt = a.element; return a }
 
-    #success = a => console.log( `C${a.id} has been mutated into ${a.element}${a.id}` )
+    #success = a => console.log( `C.${a.id} has been mutated into ${a.element}${a.id}` )
 
     #handleMutation = arr => {
         const [c, b, elt] = arr
@@ -418,6 +407,42 @@ class MutateCarbonCommand {
         if ( !this.validations.isInputValid(arr) ) return
         this.#reverseMutation(arr)
     }
+}
+
+class MutateAtomId {
+    constructor (atom, newId, atoms) {
+        this.atom = atom
+        this.newId = newId
+        this.atoms = atoms
+    }
+
+    #setLinkedTo = a => {
+        a.linkedTo.links = this.atom.linkedTo.links
+        return a
+    }
+
+    #setNewIdInAtomsOfMolecule = a => {
+        this.atoms.remove(a.element, this.atom.id)
+        this.atoms.add(a)
+        return a
+    }
+
+    #setNewIdInLinksOfAtoms = a => {
+        for (let key in a.linkedTo.links) {
+            for (const id of a.linkedTo.links[key]) {
+                this.atoms.getAtom(key, id).linkedTo.updateId(this.atom, this.newId)
+            }
+        }
+    }
+
+    mutateAtomId = () => {
+        H.pipe(
+            this.#setLinkedTo,
+            this.#setNewIdInAtomsOfMolecule,
+            this.#setNewIdInLinksOfAtoms
+        )(new Atom(this.atom.element, this.newId))
+    }
+
 }
 
 class AddAtomCommand {
@@ -824,6 +849,4 @@ class Molecule {
     }
 }
 
-module.exports = { Molecule, InvalidBond }
-
- // let m = new Molecule().brancher(3).addChaining(3,1,'C','C','F','H')
+module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule }
