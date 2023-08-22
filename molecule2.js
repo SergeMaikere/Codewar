@@ -25,7 +25,7 @@ class EmptyMolecule extends Error {
         this.name = this.constructor.name;
     }
 }
-
+ 
 class ElementUnknown extends Error {
     constructor(message) {
         super(message);
@@ -283,7 +283,6 @@ class AddBranchCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.branch = [{}]
-        this.validation = new Validation([ H.isIntBtOrEq1 ])
     }
 
     createAtom = () => new Atom('C', this.atoms.getLastId() + 1)
@@ -326,8 +325,6 @@ class AddBranchCommand {
     }
 
     execute = length => {
-        this.validation.checkValidation(length)
-
         this.handleAddingBranch( [...Array(length)] )
         this.addToBranchs()
         this.purgeBranch();
@@ -344,7 +341,6 @@ class LinkBranchsCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.atomIds = []
-        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(4), H.isArray] )
     }
 
     #findAtoms = arr => [arr.splice(0, 2), arr].map( 
@@ -375,7 +371,6 @@ class LinkBranchsCommand {
     }
 
     execute = arr => {
-        this.validations.checkValidation(arr)
         H.pipe( 
             this.#findAtoms, 
             this.#checkAtoms, 
@@ -392,7 +387,6 @@ class MutateCarbonCommand {
     constructor (branchs, atoms) {
         this.branchs = branchs
         this.atoms = atoms
-        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(3), H.isArray] )
     }
 
     #checkAtomExists = c => {
@@ -455,15 +449,9 @@ class MutateCarbonCommand {
         )(this.atoms.getAtom(elt, this.branchs.getAtom(b, c)?.id))
     }
 
-    execute = arr => {
-        this.validations.checkValidation(arr)
-        this.#handleMutation(arr)
-    }
+    execute = arr => this.#handleMutation(arr) 
 
-    undo = arr => {
-        if ( !this.validations.isInputValid(arr) ) return
-        this.#reverseMutation(arr)
-    }
+    undo = arr => this.#reverseMutation(arr)
 }
 
 class MutateAtomId {
@@ -523,7 +511,6 @@ class AddAtomCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.id = 0
-        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(3), H.isArray] )
     }
 
     #checkAtomExists = a => {
@@ -568,36 +555,16 @@ class AddAtomCommand {
         this.#removeFromAtoms(atom)
     }
 
-    execute = arr => {
-        this.validations.checkValidation(arr)
-        this.#handleAddition(arr)
-    }
+    execute = arr => this.#handleAddition(arr) 
 
-    undo = arr => {
-        if( !this.validations.isInputValid(arr) ) return
-        this.#reverseAddition(arr)
-    }
+    undo = arr => this.#reverseAddition(arr) 
 }
 
 class AddChainCommand extends AddBranchCommand {
     constructor (branchs, atoms, cBranchs) {
         super(branchs, atoms)
         this.cBranchs = cBranchs
-        this.validations = new Validation(
-            [
-                H.isArray,
-                H.validationWithFilteredInput(this.filterPos, H.isAtom),
-                H.validationWithFilteredInput(this.filterElements, H.isArrOfEltValid)
-            ]
-        )
     }
-
-    filterPos = arr => {
-        const pos = [...arr].splice(0, 2)
-        return this.atoms.getAtom('C', this.cBranchs.getAtom(arr[1], arr[0])?.id)
-    }
-
-    filterElements = arr => [...arr].splice(2)
 
     createAtom = elt => new Atom(elt, this.atoms.getLastId() + 1 )
     success = a => console.log(`Atom ${a.element} was created with id ${a.id} in chain ${this.branchs.length}`)
@@ -611,7 +578,6 @@ class AddChainCommand extends AddBranchCommand {
     }
 
     execute = arr => {
-        this.validations.checkValidation(arr)
         const [ pos, elements ] = [ arr.splice(0, 2), arr]
         this.handleAddingBranch(elements)
         this.linkToCarbon(pos)
@@ -703,7 +669,6 @@ class Atom {
         this.validations = new Validation(
             [
                 H.isAtom,
-                //this.#isValenceRespected,
                 this.#isDifferentAtom
             ]
         )
@@ -753,8 +718,6 @@ class Atom {
     }
 
     getFreeSpots = () => this.valence - this.linkedTo.total
-
-    #isValenceRespected = a => this.linkedTo.total + 1 <= this.valence
 
     #isDifferentAtom = a => a.id !== this.id || a.element !== this.element
 
