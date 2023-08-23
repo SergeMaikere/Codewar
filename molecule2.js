@@ -394,6 +394,8 @@ class MutateCarbonCommand {
         return c
     }
 
+    #isCarbon = elt => elt === 'C'
+
     #checkValenceRespected = (elt, c) => {
         c.valence = elt
         if ( c.getFreeSpots() < 0 ) { throw new InvalidBond(`${elt} cannot connect to ${c.element}${c.id}`) }
@@ -428,6 +430,9 @@ class MutateCarbonCommand {
 
     #handleMutation = arr => {
         const [c, b, elt] = arr
+
+        if ( this.#isCarbon(elt) ) return
+
         H.pipe(
             this.#checkAtomExists,
             H.curry(this.#checkValenceRespected)(elt),
@@ -570,11 +575,17 @@ class AddChainCommand extends AddBranchCommand {
     success = a => console.log(`Atom ${a.element} was created with id ${a.id} in chain ${this.branchs.length}`)
 
     linkToCarbon = pos => {
+        const aData = this.cBranchs.getAtom(pos[1], pos[0])
         const [ c, x ] = [ 
-            this.atoms.getAtom('C', this.cBranchs.getAtom(pos[1], pos[0]).id), 
+            this.atoms.getAtom(aData.elt, aData.id), 
             this.atoms.getAtom(this.branch[1].elt, this.branch[1].id ) 
         ]
         H.linkAtoms( c, x ) 
+    }
+
+    chainSuccess = pos => {
+        const cDatas = this.cBranchs.getAtom(pos[1], pos[0])
+        console.log(`Chain ${this.branchs.length - 1} is connected to ${cDatas.elt}${cDatas.id}`)
     }
 
     execute = arr => {
@@ -582,7 +593,8 @@ class AddChainCommand extends AddBranchCommand {
         this.handleAddingBranch(elements)
         this.linkToCarbon(pos)
         this.addToBranchs()
-        this.purgeBranch();
+        this.purgeBranch()
+        this.chainSuccess(pos)
     }
 }
 

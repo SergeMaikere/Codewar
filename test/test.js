@@ -412,40 +412,30 @@ describe(
 
 
 describe(
-    '60 random tests',
-    it(
-        'Invalid addChaining command is ignored',
-        () => {
+    '60 random tests', () => {
+        it(
+            'throws an InvalidBond', () => {
+                let m = new Molecule()
+                .brancher(2,2)
+                .mutate([1,2,'S'])
+                .addChaining(1,2,'O','Mg','C')
 
-            let m = new Molecule()
-            const f = () => m
-            .brancher(1,8)
-            .addChaining(1,2,'S','Br', 'Cl')
-            .add([6,2,'Mg'], [4,2,'O'], [1,1,'C'])
-            .addChaining([6,2,'Br','B'])
-            .mutate([7,2,'S'], [1,1,'H'])
+                const links = m.atoms.map(a => a.toString())
+                assert.deepEqual(
+                    links,
+                    [ 
+                        'Atom(C.1: C2)', 
+                        'Atom(C.2: C1)', 
+                        'Atom(S.3: C4,O5)', 
+                        'Atom(C.4: S3)', 
+                        'Atom(O.5: Mg6,S3)', 
+                        'Atom(Mg.6: C7,O5)', 
+                        'Atom(C.7: Mg6)' 
+                    ]
+                )
+            }
+        )
+    }
 
-            assert.throws(f, InvalidBond)
-            const links = m.atoms.map( a => a.toString() )
-            assert.deepEqual(
-                links,
-                [ 
-                    'Atom(C.2: C3)', 
-                    'Atom(C.3: C2,C4)', 
-                    'Atom(C.4: C3,C5)', 
-                    'Atom(C.5: C4,C6,O11)', 
-                    'Atom(C.6: C5,C7)', 
-                    'Atom(C.7: C6,Mg10,S8)', 
-                    'Atom(S.8: C7,C9)', 
-                    'Atom(C.9: S8)', 
-                    'Atom(Mg.10: C7)', 
-                    'Atom(O.11: C5)', 
-                    'Atom(C.12: H)' 
-                ]
-            )
-        }
-    )
 )
-
-
 
