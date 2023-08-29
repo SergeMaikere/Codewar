@@ -398,7 +398,7 @@ class MutateCarbonCommand {
 
     #checkValenceRespected = (elt, c) => {
         c.valence = elt
-        if ( c.getFreeSpots() < 0 ) { throw new InvalidBond(`${elt} cannot connect to ${c.element}${c.id}`) }
+        if ( c.getFreeSpots() < 0 ) { throw new InvalidBond(`${c.element}${c.id} cannot mutate into ${elt}${c.id}`) }
         return c
     }
 
@@ -640,6 +640,7 @@ class LockMoleculeCommand {
     execute = () => {
         this.atoms.safe.forEach( 
             a => {
+                if ( a.getFreeSpots() <= 0 ) return
                 H.pipe(
                     H.map(this.createAtom),
                     H.map(this.addToAtoms),
@@ -912,3 +913,4 @@ class Molecule {
 }
 
 module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, InvalidInput }
+

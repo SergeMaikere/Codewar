@@ -435,7 +435,84 @@ describe(
                 )
             }
         )
-    }
+        it(
+            'Ignores full atoms during hydration', () => {
+                let m = new Molecule()
 
+                const fn1 = () => m.brancher(2,4).add([2,1,'P']).addChaining(2,1,'F','N')
+                assert.throws(fn1, InvalidBond)
+
+                const fn2 = () => m.closer().unlock().mutate([2,2,'H'])
+                assert.throws(fn2, InvalidBond)
+
+                const fn3 = () => m.mutate([1,2,'F']).addChaining(2,1,'Br','C')
+                assert.throws(fn3, InvalidBond)
+
+                m.brancher(2,3,5).closer()
+
+                const links = m.atoms.map(a => a.toString())
+                assert.deepEqual(
+                    links,
+                    [
+                      'Atom(C.1: C2,H,H,H)',
+                      'Atom(C.2: C1,P7,H,H)',
+                      'Atom(F.3: C4)',
+                      'Atom(C.4: C5,F3)',
+                      'Atom(C.5: C4,C6,H,H)',
+                      'Atom(C.6: C5,H,H,H)',
+                      'Atom(P.7: C2,H,H)',
+                      'Atom(C.8: C9,H,H,H)',
+                      'Atom(C.9: C8,H,H,H)',
+                      'Atom(C.10: C11,H,H,H)',
+                      'Atom(C.11: C10,C12,H,H)',
+                      'Atom(C.12: C11,H,H,H)',
+                      'Atom(C.13: C14,H,H,H)',
+                      'Atom(C.14: C13,C15,H,H)',
+                      'Atom(C.15: C14,C16,H,H)',
+                      'Atom(C.16: C15,C17,H,H)',
+                      'Atom(C.17: C16,H,H,H)',
+                      'Atom(H.18: C1)',
+                      'Atom(H.19: C1)',
+                      'Atom(H.20: C1)',
+                      'Atom(H.21: C2)',
+                      'Atom(H.22: C2)',
+                      'Atom(H.23: C5)',
+                      'Atom(H.24: C5)',
+                      'Atom(H.25: C6)',
+                      'Atom(H.26: C6)',
+                      'Atom(H.27: C6)',
+                      'Atom(H.28: P7)',
+                      'Atom(H.29: P7)',
+                      'Atom(H.30: C8)',
+                      'Atom(H.31: C8)',
+                      'Atom(H.32: C8)',
+                      'Atom(H.33: C9)',
+                      'Atom(H.34: C9)',
+                      'Atom(H.35: C9)',
+                      'Atom(H.36: C10)',
+                      'Atom(H.37: C10)',
+                      'Atom(H.38: C10)',
+                      'Atom(H.39: C11)',
+                      'Atom(H.40: C11)',
+                      'Atom(H.41: C12)',
+                      'Atom(H.42: C12)',
+                      'Atom(H.43: C12)',
+                      'Atom(H.44: C13)',
+                      'Atom(H.45: C13)',
+                      'Atom(H.46: C13)',
+                      'Atom(H.47: C14)',
+                      'Atom(H.48: C14)',
+                      'Atom(H.49: C15)',
+                      'Atom(H.50: C15)',
+                      'Atom(H.51: C16)',
+                      'Atom(H.52: C16)',
+                      'Atom(H.53: C17)',
+                      'Atom(H.54: C17)',
+                      'Atom(H.55: C17)'
+                    ]
+                )
+            }
+        )
+    }
 )
 
