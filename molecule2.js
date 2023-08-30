@@ -43,7 +43,7 @@ class InvalidInput extends Error {
 class H {
 
     static linkAtoms = (a1, a2) => {
-        if ( ![a1, a2].every( H.isAtom ) ) return;
+        if ( ![a1, a2].every( H.isAtom ) ) return
         if ( !H.isValenceRespected([a1, a2]) ) {
             throw new InvalidBond(`${a1.element}${a1.id} cannot connect to ${a2.element}${a2.id}`)
         }
@@ -340,19 +340,18 @@ class LinkBranchsCommand {
     constructor (branchs, atoms) {
         this.branchs = branchs
         this.atoms = atoms
+        this.atomsToLink = []
         this.atomIds = []
     }
 
     #findAtoms = arr => [arr.splice(0, 2), arr].map( 
-        args => this.atoms.getAtom('C', this.branchs.getAtom(args[1], args[0])?.id) 
+        args => {
+            const aData = this.branchs.getAtom(args[1], args[0])
+            return this.atoms.getAtom(aData?.elt, aData?.id)
+        } 
     )
 
-    #checkAtoms = arr => { 
-        if ( !arr.some( H.isAtom ) ) { throw new Exception('Atom is inexistant') }
-        return arr
-    } 
-
-    #setAtomsIds = arr => arr.map( a => {this.atomIds.push(a.id); return a} )
+    #setAtomsToLink = arr => arr.map( a => {this.atomsToLink.push({elt: a.element, id: a.id}); return a} )
 
     #linkAtom = arr => { H.linkAtoms(arr[0], arr[1]); return arr }
 
@@ -361,26 +360,31 @@ class LinkBranchsCommand {
         console.log( `${a1.element}${a1.id} is now linked to ${a2.element}${a2.id}` )
     }
 
-    #removeLink = () => {
-        if (this.atomIds.length !== 2) return
-        if (this.atomIds[0] === this.atomIds[1]) return
+    #removeLink = arr => {
+        if (this.atomsToLink.length !== 2) return
+        if (this.atomsToLink[0].id === this.atomsToLink[1].id) return
 
-        this.atomIds
-        .map( atomId => this.atoms.getAtom('C', atomId) )
-        .forEach( (a, i) => a.linkedTo.remove('C', this.atomIds[ i === 0 ? 1 : 0 ]) )
+        [ arr.splice(0,2), arr ]
+        .map( pos => this.branchs.getAtom(pos[1], pos[0]) )
+        .map( aData => this.atoms.getAtom(aData.elt, aData.id) )
+        .forEach( 
+            (a, i) => {
+                const otherAtom = this.atomsToLink[ i=== 0 ? 1 : 0 ]
+                a.linkedTo.remove(otherAtom.elt, otherAtom.id) 
+            }
+        )
     }
 
     execute = arr => {
         H.pipe( 
             this.#findAtoms, 
-            this.#checkAtoms, 
-            this.#setAtomsIds, 
+            this.#setAtomsToLink, 
             this.#linkAtom,
             this.#success 
-        )(arr)
+        )([...arr])
     }
 
-    undo = arr => this.#removeLink()
+    undo = arr => this.#removeLink(arr)
 }
 
 class MutateCarbonCommand {
@@ -394,11 +398,14 @@ class MutateCarbonCommand {
         return c
     }
 
-    #isCarbon = elt => elt === 'C'
+    #isSameElt = (oldElt, newElt) => oldElt === newElt
 
     #checkValenceRespected = (elt, c) => {
         c.valence = elt
-        if ( c.getFreeSpots() < 0 ) { throw new InvalidBond(`${c.element}${c.id} cannot mutate into ${elt}${c.id}`) }
+        if ( c.getFreeSpots() < 0 ) { 
+            c.valence = c.element
+            throw new InvalidBond(`${c.element}${c.id} cannot mutate into ${elt}${c.id}`) 
+        }
         return c
     }
 
@@ -431,7 +438,9 @@ class MutateCarbonCommand {
     #handleMutation = arr => {
         const [c, b, elt] = arr
 
-        if ( this.#isCarbon(elt) ) return
+        const aData = this.branchs.getAtom(b, c)
+
+        if ( this.#isSameElt(aData.elt, elt) ) return
 
         H.pipe(
             this.#checkAtomExists,
@@ -441,7 +450,7 @@ class MutateCarbonCommand {
             this.#updateAtomIndex,
             H.curry(this.#updateBranchs)(c, b),
             this.#success
-        )(this.atoms.getAtom('C', this.branchs.getAtom(b, c)?.id))
+        )(this.atoms.getAtom(aData.elt, aData.id))
     }
 
     #reverseMutation = arr => {
@@ -912,5 +921,5 @@ class Molecule {
     }
 }
 
-module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, InvalidInput }
+module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown }
 

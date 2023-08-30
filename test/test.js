@@ -1,4 +1,4 @@
-const { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, InvalidInput } = require('../molecule2.js')
+const { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown } = require('../molecule2.js')
 const chai = require('chai')
 const assert = chai.assert
 
@@ -413,10 +413,12 @@ describe(
 
 describe(
     '60 random tests', () => {
+        let m
+        beforeEach( () => m = new Molecule() )
+
         it(
             'throws an InvalidBond', () => {
-                let m = new Molecule()
-                .brancher(2,2)
+                m.brancher(2,2)
                 .mutate([1,2,'S'])
                 .addChaining(1,2,'O','Mg','C')
 
@@ -437,7 +439,6 @@ describe(
         )
         it(
             'Ignores full atoms during hydration', () => {
-                let m = new Molecule()
 
                 const fn1 = () => m.brancher(2,4).add([2,1,'P']).addChaining(2,1,'F','N')
                 assert.throws(fn1, InvalidBond)
@@ -457,7 +458,7 @@ describe(
                       'Atom(C.1: C2,H,H,H)',
                       'Atom(C.2: C1,P7,H,H)',
                       'Atom(F.3: C4)',
-                      'Atom(C.4: C5,F3)',
+                      'Atom(C.4: C5,F3,H,H)',
                       'Atom(C.5: C4,C6,H,H)',
                       'Atom(C.6: C5,H,H,H)',
                       'Atom(P.7: C2,H,H)',
@@ -476,41 +477,108 @@ describe(
                       'Atom(H.20: C1)',
                       'Atom(H.21: C2)',
                       'Atom(H.22: C2)',
-                      'Atom(H.23: C5)',
-                      'Atom(H.24: C5)',
-                      'Atom(H.25: C6)',
-                      'Atom(H.26: C6)',
+                      'Atom(H.23: C4)',
+                      'Atom(H.24: C4)',
+                      'Atom(H.25: C5)',
+                      'Atom(H.26: C5)',
                       'Atom(H.27: C6)',
-                      'Atom(H.28: P7)',
-                      'Atom(H.29: P7)',
-                      'Atom(H.30: C8)',
-                      'Atom(H.31: C8)',
+                      'Atom(H.28: C6)',
+                      'Atom(H.29: C6)',
+                      'Atom(H.30: P7)',
+                      'Atom(H.31: P7)',
                       'Atom(H.32: C8)',
-                      'Atom(H.33: C9)',
-                      'Atom(H.34: C9)',
+                      'Atom(H.33: C8)',
+                      'Atom(H.34: C8)',
                       'Atom(H.35: C9)',
-                      'Atom(H.36: C10)',
-                      'Atom(H.37: C10)',
+                      'Atom(H.36: C9)',
+                      'Atom(H.37: C9)',
                       'Atom(H.38: C10)',
-                      'Atom(H.39: C11)',
-                      'Atom(H.40: C11)',
-                      'Atom(H.41: C12)',
-                      'Atom(H.42: C12)',
+                      'Atom(H.39: C10)',
+                      'Atom(H.40: C10)',
+                      'Atom(H.41: C11)',
+                      'Atom(H.42: C11)',
                       'Atom(H.43: C12)',
-                      'Atom(H.44: C13)',
-                      'Atom(H.45: C13)',
+                      'Atom(H.44: C12)',
+                      'Atom(H.45: C12)',
                       'Atom(H.46: C13)',
-                      'Atom(H.47: C14)',
-                      'Atom(H.48: C14)',
-                      'Atom(H.49: C15)',
-                      'Atom(H.50: C15)',
-                      'Atom(H.51: C16)',
-                      'Atom(H.52: C16)',
-                      'Atom(H.53: C17)',
-                      'Atom(H.54: C17)',
-                      'Atom(H.55: C17)'
+                      'Atom(H.47: C13)',
+                      'Atom(H.48: C13)',
+                      'Atom(H.49: C14)',
+                      'Atom(H.50: C14)',
+                      'Atom(H.51: C15)',
+                      'Atom(H.52: C15)',
+                      'Atom(H.53: C16)',
+                      'Atom(H.54: C16)',
+                      'Atom(H.55: C17)',
+                      'Atom(H.56: C17)',
+                      'Atom(H.57: C17)'
                     ]
                 )
+            }
+        )
+
+        it(
+            'Is a mysterious bug', () => {
+
+                const f1 = () => m
+                .brancher(6,8,2)
+                .add([1,1,'Cl'], [1,1,'Cl'])
+                .closer()
+                .unlock()
+                .addChaining(1,1,'H','F','C')
+                assert.throws(f1, InvalidBond)
+
+                const f2 = () => m.brancher(1,7,3).addChaining(1,6,'Br','O')
+                assert.throws(f2, InvalidBond)
+
+                const f3 = () => m.addChaining(1,1,'S','H','P')
+                assert.throws(f3, InvalidBond)
+
+                const f4 = () => m.brancher(4).addChaining(1,3,'Cl','H')
+                assert.throws(f4, InvalidBond)
+
+                const f5 = () => m
+                .bounder([2,7,7,2])
+                .brancher(7)
+                .add([5,8,'C'], [6,5,'S'])
+                .addChaining(1,1,'O')
+                .add([3,7,'B'], [5,8,'P'], [2,3,'H'], [4,7,'P'], [5,5,'Mg'], [4,7,'B'])
+                .mutate([7,5,'P'],[6,5,'Mg'])
+                assert.throws(f5, InvalidBond)
+
+                m.mutate([1,4,'F']).bounder([1,4,3,1], [1,3,3,8], [2,3,6,5])
+
+            }
+        )
+
+        it(
+            'Can mutate same atom twice', () => {
+                m.brancher(4).mutate([4,1,'Mg'], [4,1,'O'])
+                const links = m.atoms.map(a=>a.toString())
+                console.log(links)
+                assert.deepEqual(
+                    links,
+                    [
+                        'Atom(C.1: C2)',
+                        'Atom(C.2: C1,C3)',
+                        'Atom(C.3: C2,Mg4)',
+                        'Atom(O.4: C3)'
+                    ]
+                )
+            }
+        )
+
+        it(
+            'Does something', () => {
+                f = () => m.brancher(2,2)
+                .addChaining(2,1,'B','N','F')
+                .mutate([1,2,'N'])
+                .addChaining(1,2,'O','P','O')
+                .mutate([2,1,'Cl'])
+                assert.throws(f, InvalidBond)
+
+                f2 = () => m.addChaining(1,2,'C','C','C').bounder([2,2,1,2])
+                assert.throws(f2, InvalidBond)
             }
         )
     }
