@@ -215,6 +215,7 @@ class LinksOfAtom {
     add = (elt, id) => this.links[elt] ? this.links[elt].push(id) : this.links[elt] = [id]
 
     remove = (elt, id) => {
+        if ( !this.links[elt] ) return
         this.links[elt] = [...this.links[elt]].filter( linkedId => id !== linkedId  )
         if (this.links[elt].length === 0) delete this.links[elt]
     }
@@ -369,7 +370,7 @@ class LinkBranchsCommand {
         .map( aData => this.atoms.getAtom(aData.elt, aData.id) )
         .forEach( 
             (a, i) => {
-                const otherAtom = this.atomsToLink[ i=== 0 ? 1 : 0 ]
+                const otherAtom = this.atomsToLink[ i === 0 ? 1 : 0 ]
                 a.linkedTo.remove(otherAtom.elt, otherAtom.id) 
             }
         )
@@ -921,5 +922,5 @@ class Molecule {
     }
 }
 
-module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown }
+//module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown }
 

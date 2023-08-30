@@ -570,15 +570,17 @@ describe(
 
         it(
             'Does something', () => {
-                f = () => m.brancher(2,2)
-                .addChaining(2,1,'B','N','F')
-                .mutate([1,2,'N'])
-                .addChaining(1,2,'O','P','O')
-                .mutate([2,1,'Cl'])
+                f = () => m.brancher(8).mutate([4,1,'S'],[1,1,'Br'],[3,1,'F'])
                 assert.throws(f, InvalidBond)
 
-                f2 = () => m.addChaining(1,2,'C','C','C').bounder([2,2,1,2])
+                f2 = () => m.closer().unlock().bounder([6,1,8,1],[5,1,7,1],[7,1,3,1],[2,1,4,1])
                 assert.throws(f2, InvalidBond)
+
+                f3 = () => m.brancher(5,1,7).addChaining(3,1,'N','F','S')
+                assert.throws(f3, InvalidBond)
+
+                f4 = () => m.bounder([1,1,5,2])
+                assert.throws(f4, InvalidBond)
             }
         )
     }
