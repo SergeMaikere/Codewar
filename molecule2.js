@@ -208,8 +208,13 @@ class LinksOfAtom {
         .forEach( linkedId => this.add(newElt, id) )
 
     updateId = (a, newId) => {
-        this.remove(a.element, a.id)
-        this.add(a.element, newId)
+
+        this.links[a.element] = [...this.links[a.element]].map(
+            id => {
+                if (id === a.id) return newId
+                return id
+            }
+        )
     }
 
     add = (elt, id) => this.links[elt] ? this.links[elt].push(id) : this.links[elt] = [id]
@@ -395,7 +400,7 @@ class MutateCarbonCommand {
     }
 
     #checkAtomExists = c => {
-        if (!H.isAtom(c)) { throw new InvalidBond('Atom is inexistant') }
+        if (!H.isAtom(c)) { throw new InvalidBond(`${c.element}${c.id} is inexistant`) }
         return c
     }
 
@@ -434,7 +439,7 @@ class MutateCarbonCommand {
 
     #updateBranchs = (c, b, a) => { this.branchs.getAtom(b, c).elt = a.element; return a }
 
-    #success = a => console.log( `C.${a.id} has been mutated into ${a.element}${a.id}` )
+    #success = (elt, a) => console.log( `${elt}${a.id} has been mutated into ${a.element}${a.id}` )
 
     #handleMutation = arr => {
         const [c, b, elt] = arr
@@ -447,21 +452,23 @@ class MutateCarbonCommand {
             this.#checkAtomExists,
             H.curry(this.#checkValenceRespected)(elt),
             H.curry(this.#mutateCarbon)(elt),
-            H.curry(this.#updateAtomsLinkedTo)(elt, 'C'),
+            H.curry(this.#updateAtomsLinkedTo)(elt, aData.elt),
             this.#updateAtomIndex,
             H.curry(this.#updateBranchs)(c, b),
-            this.#success
+            H.curry(this.#success)(aData.elt)
         )(this.atoms.getAtom(aData.elt, aData.id))
     }
 
     #reverseMutation = arr => {
         const [c, b, elt] = arr
-        if ( !H.isAtom(this.atoms.getAtom(elt, this.branchs.getAtom(b, c)?.id)) ) return
+        const aData = this.branchs.getAtom(b, c)
+
+        if ( !H.isAtom(this.atoms.getAtom(elt, aData.id)) ) return
 
         H.pipe( 
-            H.curry(this.#mutateCarbon)('C'), 
-            H.curry(this.#updateAtomsLinkedTo)('C', elt) 
-        )(this.atoms.getAtom(elt, this.branchs.getAtom(b, c)?.id))
+            H.curry(this.#mutateCarbon)(aData.elt), 
+            H.curry(this.#updateAtomsLinkedTo)(aData.elt, elt) 
+        )(this.atoms.getAtom(elt, aData.id))
     }
 
     execute = arr => this.#handleMutation(arr) 
@@ -529,7 +536,7 @@ class AddAtomCommand {
     }
 
     #checkAtomExists = a => {
-        if (!H.isAtom(a)) { throw new InvalidBond('Atom is inexistant') }
+        if (!H.isAtom(a)) { throw new InvalidBond(`${a.element}${a.id} is inexistant`) }
         return a
     }
 
@@ -668,6 +675,7 @@ class LockMoleculeCommand {
             H.map(this.removeHydrogen),
             H.forEach(this.openSuccess)
         )( [...this.atoms.safe].filter(a => a.element === 'H') )
+
         this.branchs.removeHydrogenFromBranchs()
         this.atoms.setContinuousId(this.branchs)
     }
@@ -922,5 +930,4 @@ class Molecule {
     }
 }
 
-//module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown }
-
+module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown }

@@ -555,13 +555,12 @@ describe(
             'Can mutate same atom twice', () => {
                 m.brancher(4).mutate([4,1,'Mg'], [4,1,'O'])
                 const links = m.atoms.map(a=>a.toString())
-                console.log(links)
                 assert.deepEqual(
                     links,
                     [
                         'Atom(C.1: C2)',
                         'Atom(C.2: C1,C3)',
-                        'Atom(C.3: C2,Mg4)',
+                        'Atom(C.3: C2,O4)',
                         'Atom(O.4: C3)'
                     ]
                 )
@@ -569,20 +568,47 @@ describe(
         )
 
         it(
-            'Does something', () => {
-                f = () => m.brancher(8).mutate([4,1,'S'],[1,1,'Br'],[3,1,'F'])
+            'handles properly double-linked atoms after closing and unlocking', () => {
+                
+                f = () => m
+                .brancher(1,2,2)
+                .add([1,3,'Br'],[2,3,'F'],[2,2,'S'])
+                .mutate([2,3,'S'],[1,1,'S'])
+                .bounder([1,1,1,2],[1,2,2,2],[1,1,1,1])
                 assert.throws(f, InvalidBond)
 
-                f2 = () => m.closer().unlock().bounder([6,1,8,1],[5,1,7,1],[7,1,3,1],[2,1,4,1])
+                f2 = () => m.addChaining(1,1,'N','P').add([1,3,'C']).addChaining(1,1,'B')
                 assert.throws(f2, InvalidBond)
 
-                f3 = () => m.brancher(5,1,7).addChaining(3,1,'N','F','S')
+                f3 = () => m.addChaining(1,1,'F')
                 assert.throws(f3, InvalidBond)
 
-                f4 = () => m.bounder([1,1,5,2])
+                f4 = () => m.bounder([1,3,1,1])
                 assert.throws(f4, InvalidBond)
+
+                f5 = () => m.addChaining(1,1,'N','N')
+                assert.throws(f5, InvalidBond)
+
+                m.closer().unlock()
+
+                const links = m.atoms.map(a=>a.toString())
+                assert.deepEqual(
+                    links,
+                    [ 
+                        'Atom(S.1: C2,N9)', 
+                        'Atom(C.2: C3,C3,S1)', 
+                        'Atom(C.3: C2,C2,S8)', 
+                        'Atom(C.4: C11,Br6,S5)', 
+                        'Atom(S.5: C4,F7)', 
+                        'Atom(Br.6: C4)', 
+                        'Atom(F.7: S5)', 
+                        'Atom(S.8: C3)', 
+                        'Atom(N.9: P10,S1)', 
+                        'Atom(P.10: N9)', 
+                        'Atom(C.11: C4)' 
+                    ]
+                )
             }
         )
     }
 )
-
