@@ -243,23 +243,10 @@ class BranchsOfMolecule {
     getAtom = (branchIndex, atomIndex) => this.safe?.[branchIndex]?.[atomIndex]
 
     removeEmptyBranches = () => {
-        this.safe = [...this.safe].filter(
-            (b, i) => {
-                if ( i === 0) return true
-                return this.hasLeaves(b) && !this.isEmptyBranch(b)
-            }
-        )
+        this.safe = [...this.safe].filter((b, i) => i === 0 ? true : !this.isEmptyBranch(b))
     }
 
     isEmptyBranch = b => b.length === 1
-
-    hasLeaves = b => b.every( 
-        (a, i) => {
-            if (i === 0) return true
-            const myAtom = this.atoms.getAtom(a?.elt, a?.id)
-            return H.isAtom(myAtom) && !myAtom.linkedTo?.isLonely() 
-        }
-    )
 
     removeHydrogenFromBranchs = () => this.safe = [...this.safe].map( b => b.filter( a => a.elt !== 'H' || H.isLonelyObject(a) ) )
 

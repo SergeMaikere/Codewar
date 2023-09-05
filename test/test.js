@@ -610,5 +610,61 @@ describe(
                 )
             }
         )
+
+        it(
+            'Does a mysterious thing', () => {
+                m.brancher(2)
+                .mutate([2,1,'P'],[2,1,'N'],[2,1,'F'])
+                .brancher(9,2,7)
+                .bounder([3,4,7,4],[1,1,2,3],[2,3,3,2])
+                .add([2,2,'B'],[3,4,'F'],[4,2,'O'])
+                .bounder([6,2,1,3],[5,4,7,4],[3,2,1,2],[1,1,2,4],[4,2,1,2])
+                .brancher(1,8,1)
+                .addChaining(1,5,'B')
+                .closer().unlock()
+                .bounder([4,4,1,3],[1,7,1,5],[1,5,9,2])
+
+                const links = m.atoms.map(a => a.toString())
+                assert.deepEqual(
+                    links,
+                    [ 
+                        'Atom(C.1: C13,C15,F2)', 
+                        'Atom(F.2: C1)', 
+                        'Atom(C.3: C4,C5,C6)', 
+                        'Atom(C.4: C3,C5,B21)', 
+                        'Atom(C.5: C3,C4,C6,C13)', 
+                        'Atom(C.6: C3,C5,C7,O23)', 
+                        'Atom(C.7: C6,C8)', 
+                        'Atom(C.8: C7,C9,C12)', 
+                        'Atom(C.9: C8,C10)', 
+                        'Atom(C.10: C9,C11)', 
+                        'Atom(C.11: C10,C24)', 
+                        'Atom(C.12: C8,C13,C17)', 
+                        'Atom(C.13: C1,C5,C12)', 
+                        'Atom(C.14: C15)', 
+                        'Atom(C.15: C1,C14,C16)', 
+                        'Atom(C.16: C15,C17,C20,F22)', 
+                        'Atom(C.17: C12,C16,C18)', 
+                        'Atom(C.18: C17,C19,C20)', 
+                        'Atom(C.19: C18,C20)', 
+                        'Atom(C.20: C16,C18,C19)', 
+                        'Atom(B.21: C4)', 
+                        'Atom(F.22: C16)', 
+                        'Atom(O.23: C6)', 
+                        'Atom(C.24: C11,C33,B34)', 
+                        'Atom(C.25: C26)', 
+                        'Atom(C.26: C25,C27)', 
+                        'Atom(C.27: C26,C28)', 
+                        'Atom(C.28: C27,C29)', 
+                        'Atom(C.29: C28,C30)', 
+                        'Atom(C.30: C29,C31)', 
+                        'Atom(C.31: C30,C32)', 
+                        'Atom(C.32: C31)', 
+                        'Atom(C.33: C24)', 
+                        'Atom(B.34: C24)' 
+                    ]
+                )
+            }
+        )
     }
 )
