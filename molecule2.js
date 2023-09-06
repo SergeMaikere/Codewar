@@ -221,7 +221,8 @@ class LinksOfAtom {
 
     remove = (elt, id) => {
         if ( !this.links[elt] ) return
-        this.links[elt] = [...this.links[elt]].filter( linkedId => id !== linkedId  )
+        const i = [...this.links[elt]].findIndex( linkedId => id === linkedId )
+        this.links[elt].splice(i,1)
         if (this.links[elt].length === 0) delete this.links[elt]
     }
 }
@@ -371,8 +372,8 @@ class LinkBranchsCommand {
     execute = arr => {
         H.pipe( 
             this.#findAtoms, 
-            this.#setAtomsToLink, 
             this.#linkAtom,
+            this.#setAtomsToLink, 
             this.#success 
         )([...arr])
     }
