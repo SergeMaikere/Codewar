@@ -203,9 +203,7 @@ class LinksOfAtom {
         this.remove(oldElt, id)
     }
 
-    #addNewElt = (oldElt, newElt, id) => [...this.links[oldElt]]
-        .filter( linkedId => id === linkedId )
-        .forEach( linkedId => this.add(newElt, id) )
+    #addNewElt = (oldElt, newElt, id) => this.add(newElt, id)
 
     updateId = (a, newId) => {
 
@@ -319,6 +317,7 @@ class AddBranchCommand {
     }
 
     execute = length => {
+        console.log(`\nCOMMAND: .brancher(${length})`)
         this.handleAddingBranch( [...Array(length)] )
         this.addToBranchs()
         this.purgeBranch();
@@ -338,7 +337,8 @@ class LinkBranchsCommand {
         this.atomIds = []
     }
 
-    #findAtoms = arr => [arr.splice(0, 2), arr].map( 
+    #findAtoms = arr => [arr.splice(0, 2), arr]
+    .map( 
         args => {
             const aData = this.branchs.getAtom(args[1], args[0])
             return this.atoms.getAtom(aData?.elt, aData?.id)
@@ -348,6 +348,8 @@ class LinkBranchsCommand {
     #setAtomsToLink = arr => arr.map( a => {this.atomsToLink.push({elt: a.element, id: a.id}); return a} )
 
     #linkAtom = arr => { H.linkAtoms(arr[0], arr[1]); return arr }
+
+    #purgeAtomsToLink = () => this.atomsToLink = []
 
     #success = arr => {
         const [ a1, a2 ] = arr
@@ -364,18 +366,20 @@ class LinkBranchsCommand {
         .forEach( 
             (a, i) => {
                 const otherAtom = this.atomsToLink[ i === 0 ? 1 : 0 ]
-                a.linkedTo.remove(otherAtom.elt, otherAtom.id) 
+                a.linkedTo.remove(otherAtom.element, otherAtom.id) 
             }
         )
     }
 
     execute = arr => {
+        console.log(`\nCOMMAND: .bounder(${arr})`)
         H.pipe( 
             this.#findAtoms, 
-            this.#linkAtom,
             this.#setAtomsToLink, 
+            this.#linkAtom,
             this.#success 
         )([...arr])
+        this.#purgeAtomsToLink()
     }
 
     undo = arr => this.#removeLink(arr)
@@ -430,11 +434,14 @@ class MutateCarbonCommand {
     #success = (elt, a) => console.log( `${elt}${a.id} has been mutated into ${a.element}${a.id}` )
 
     #handleMutation = arr => {
+        console.log(`\nCOMMAND: .mutate(${arr})`)
         const [c, b, elt] = arr
-
         const aData = this.branchs.getAtom(b, c)
 
-        if ( this.#isSameElt(aData.elt, elt) ) return
+        if ( this.#isSameElt(aData.elt, elt) ) {
+            console.log(`${aData.elt}${aData.id} is already a ${aData.elt}`)
+            return
+        }
 
         H.pipe(
             this.#checkAtomExists,
@@ -450,7 +457,6 @@ class MutateCarbonCommand {
     #reverseMutation = arr => {
         const [c, b, elt] = arr
         const aData = this.branchs.getAtom(b, c)
-
         if ( !H.isAtom(this.atoms.getAtom(elt, aData.id)) ) return
 
         H.pipe( 
@@ -540,26 +546,29 @@ class AddAtomCommand {
 
     #addToAtoms = a => { this.atoms.add(a); return a }
 
+    #purgeId = () => this.id = 0
+
     #success = (a, newA) => console.log( `${newA.element}${newA.id} has been added to ${a.elt}${a.id}` )
 
     #removeFromAtoms = a => this.atoms.remove(a)
 
     #handleAddition = arr => {
+        console.log(`\nCOMMAND: .add(${arr})`)
         const [ c, b, elt ] = arr
         const branchAtom = this.branchs.getAtom(b, c)
         H.pipe(
             this.#checkAtomExists,
-            this.#setId,
             H.curry(this.#linkAtomToNewElement)(elt),
+            this.#setId,
             this.#addToAtoms,
             H.curry(this.#success)(branchAtom)
         )(this.atoms.getAtom(branchAtom?.elt, branchAtom?.id))
+        this.#purgeId()
     }
 
     #reverseAddition = arr => {
         const [c, b, elt] = arr
         const [carbon, atom] = [this.atoms.getAtom('C', this.branchs.getAtom(b, c)?.id), this.atoms.getAtom(elt, this.id)]
-
         if ( !H.isAtom(carbon) || !H.isAtom(atom) ) return
         this.#removeNewElementFromCarbonLinks(elt, this.id, carbon)
         this.#removeFromAtoms(atom)
@@ -594,6 +603,7 @@ class AddChainCommand extends AddBranchCommand {
     }
 
     execute = arr => {
+        console.log(`\nCOMMAND: .addChaining(${arr})`)
         const [ pos, elements ] = [ arr.splice(0, 2), arr]
         this.handleAddingBranch(elements)
         this.linkToCarbon(pos)
@@ -643,6 +653,7 @@ class LockMoleculeCommand {
     openSuccess = h => console.log(`H.${h.id} has been removed from molecule`)
 
     execute = () => {
+        console.log(`\nCOMMAND: .closer()`)
         this.atoms.safe.forEach( 
             a => {
                 if ( a.getFreeSpots() <= 0 ) return
@@ -651,21 +662,24 @@ class LockMoleculeCommand {
                     H.map(this.addToAtoms),
                     H.map(this.addToBranch),
                     H.map( H.curry(this.linkAtom)(a) ),
-                    H.forEach( H.curry(this.closeSuccess)(a) )
+                    H.forEach( h => h )
                 )( [...Array(a.getFreeSpots())] )
             }
         )
+        console.log('Molecule LOCKED')
     }
 
     undo = () => {
+        console.log(`\nCOMMAND: .unlock()`)
         H.pipe(
             H.map(this.removeAllLinks),
             H.map(this.removeHydrogen),
-            H.forEach(this.openSuccess)
+            H.forEach( h => h )
         )( [...this.atoms.safe].filter(a => a.element === 'H') )
 
         this.branchs.removeHydrogenFromBranchs()
         this.atoms.setContinuousId(this.branchs)
+        console.log('Molecule UNLOCKED')
     }
 }
 
@@ -919,3 +933,5 @@ class Molecule {
 }
 
 module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown }
+
+
