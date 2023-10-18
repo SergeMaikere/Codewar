@@ -25,7 +25,7 @@ class EmptyMolecule extends Error {
         this.name = this.constructor.name;
     }
 }
-
+ 
 class ElementUnknown extends Error {
     constructor(message) {
         super(message);
@@ -43,7 +43,7 @@ class InvalidInput extends Error {
 class H {
 
     static linkAtoms = (a1, a2) => {
-        if ( ![a1, a2].every( H.isAtom ) ) return;
+        if ( ![a1, a2].every( H.isAtom ) ) return
         if ( !H.isValenceRespected([a1, a2]) ) {
             throw new InvalidBond(`${a1.element}${a1.id} cannot connect to ${a2.element}${a2.id}`)
         }
@@ -203,19 +203,24 @@ class LinksOfAtom {
         this.remove(oldElt, id)
     }
 
-    #addNewElt = (oldElt, newElt, id) => [...this.links[oldElt]]
-        .filter( linkedId => id === linkedId )
-        .forEach( linkedId => this.add(newElt, id) )
+    #addNewElt = (oldElt, newElt, id) => this.add(newElt, id)
 
     updateId = (a, newId) => {
-        this.remove(a.element, a.id)
-        this.add(a.element, newId)
+
+        this.links[a.element] = [...this.links[a.element]].map(
+            id => {
+                if (id === a.id) return newId
+                return id
+            }
+        )
     }
 
     add = (elt, id) => this.links[elt] ? this.links[elt].push(id) : this.links[elt] = [id]
 
     remove = (elt, id) => {
-        this.links[elt] = [...this.links[elt]].filter( linkedId => id !== linkedId  )
+        if ( !this.links[elt] ) return
+        const i = [...this.links[elt]].findIndex( linkedId => id === linkedId )
+        this.links[elt].splice(i,1)
         if (this.links[elt].length === 0) delete this.links[elt]
     }
 }
@@ -237,23 +242,10 @@ class BranchsOfMolecule {
     getAtom = (branchIndex, atomIndex) => this.safe?.[branchIndex]?.[atomIndex]
 
     removeEmptyBranches = () => {
-        this.safe = [...this.safe].filter(
-            (b, i) => {
-                if ( i === 0) return true
-                return this.hasLeaves(b) && !this.isEmptyBranch(b)
-            }
-        )
+        this.safe = [...this.safe].filter((b, i) => i === 0 ? true : !this.isEmptyBranch(b))
     }
 
     isEmptyBranch = b => b.length === 1
-
-    hasLeaves = b => b.every( 
-        (a, i) => {
-            if (i === 0) return true
-            const myAtom = this.atoms.getAtom(a?.elt, a?.id)
-            return H.isAtom(myAtom) && !myAtom.linkedTo?.isLonely() 
-        }
-    )
 
     removeHydrogenFromBranchs = () => this.safe = [...this.safe].map( b => b.filter( a => a.elt !== 'H' || H.isLonelyObject(a) ) )
 
@@ -283,7 +275,6 @@ class AddBranchCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.branch = [{}]
-        this.validation = new Validation([ H.isIntBtOrEq1 ])
     }
 
     createAtom = () => new Atom('C', this.atoms.getLastId() + 1)
@@ -326,8 +317,7 @@ class AddBranchCommand {
     }
 
     execute = length => {
-        this.validation.checkValidation(length)
-
+        console.log(`\nCOMMAND: .brancher(${length})`)
         this.handleAddingBranch( [...Array(length)] )
         this.addToBranchs()
         this.purgeBranch();
@@ -343,66 +333,77 @@ class LinkBranchsCommand {
     constructor (branchs, atoms) {
         this.branchs = branchs
         this.atoms = atoms
+        this.atomsToLink = []
         this.atomIds = []
-        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(4), H.isArray] )
     }
 
-    #findAtoms = arr => [arr.splice(0, 2), arr].map( 
-        args => this.atoms.getAtom('C', this.branchs.getAtom(args[1], args[0])?.id) 
+    #findAtoms = arr => [arr.splice(0, 2), arr]
+    .map( 
+        args => {
+            const aData = this.branchs.getAtom(args[1], args[0])
+            return this.atoms.getAtom(aData?.elt, aData?.id)
+        } 
     )
 
-    #checkAtoms = arr => { 
-        if ( !arr.some( H.isAtom ) ) { throw new Exception('Atom is inexistant') }
-        return arr
-    } 
-
-    #setAtomsIds = arr => arr.map( a => {this.atomIds.push(a.id); return a} )
+    #setAtomsToLink = arr => arr.map( a => {this.atomsToLink.push({elt: a.element, id: a.id}); return a} )
 
     #linkAtom = arr => { H.linkAtoms(arr[0], arr[1]); return arr }
+
+    #purgeAtomsToLink = () => this.atomsToLink = []
 
     #success = arr => {
         const [ a1, a2 ] = arr
         console.log( `${a1.element}${a1.id} is now linked to ${a2.element}${a2.id}` )
     }
 
-    #removeLink = () => {
-        if (this.atomIds.length !== 2) return
-        if (this.atomIds[0] === this.atomIds[1]) return
+    #removeLink = arr => {
+        if (this.atomsToLink.length !== 2) return
+        if (this.atomsToLink[0].id === this.atomsToLink[1].id) return
 
-        this.atomIds
-        .map( atomId => this.atoms.getAtom('C', atomId) )
-        .forEach( (a, i) => a.linkedTo.remove('C', this.atomIds[ i === 0 ? 1 : 0 ]) )
+        [ arr.splice(0,2), arr ]
+        .map( pos => this.branchs.getAtom(pos[1], pos[0]) )
+        .map( aData => this.atoms.getAtom(aData.elt, aData.id) )
+        .forEach( 
+            (a, i) => {
+                const otherAtom = this.atomsToLink[ i === 0 ? 1 : 0 ]
+                a.linkedTo.remove(otherAtom.element, otherAtom.id) 
+            }
+        )
     }
 
     execute = arr => {
-        this.validations.checkValidation(arr)
+        console.log(`\nCOMMAND: .bounder(${arr})`)
         H.pipe( 
             this.#findAtoms, 
-            this.#checkAtoms, 
-            this.#setAtomsIds, 
+            this.#setAtomsToLink, 
             this.#linkAtom,
             this.#success 
-        )(arr)
+        )([...arr])
+        this.#purgeAtomsToLink()
     }
 
-    undo = arr => this.#removeLink()
+    undo = arr => this.#removeLink(arr)
 }
 
 class MutateCarbonCommand {
     constructor (branchs, atoms) {
         this.branchs = branchs
         this.atoms = atoms
-        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(3), H.isArray] )
     }
 
     #checkAtomExists = c => {
-        if (!H.isAtom(c)) { throw new InvalidBond('Atom is inexistant') }
+        if (!H.isAtom(c)) { throw new InvalidBond(`${c.element}${c.id} is inexistant`) }
         return c
     }
 
+    #isSameElt = (oldElt, newElt) => oldElt === newElt
+
     #checkValenceRespected = (elt, c) => {
         c.valence = elt
-        if ( c.getFreeSpots() < 0 ) { throw new InvalidBond(`${elt} cannot connect to ${c.element}${c.id}`) }
+        if ( c.getFreeSpots() < 0 ) { 
+            c.valence = c.element
+            throw new InvalidBond(`${c.element}${c.id} cannot mutate into ${elt}${c.id}`) 
+        }
         return c
     }
 
@@ -430,40 +431,43 @@ class MutateCarbonCommand {
 
     #updateBranchs = (c, b, a) => { this.branchs.getAtom(b, c).elt = a.element; return a }
 
-    #success = a => console.log( `C.${a.id} has been mutated into ${a.element}${a.id}` )
+    #success = (elt, a) => console.log( `${elt}${a.id} has been mutated into ${a.element}${a.id}` )
 
     #handleMutation = arr => {
+        console.log(`\nCOMMAND: .mutate(${arr})`)
         const [c, b, elt] = arr
+        const aData = this.branchs.getAtom(b, c)
+
+        if ( this.#isSameElt(aData.elt, elt) ) {
+            console.log(`${aData.elt}${aData.id} is already a ${aData.elt}`)
+            return
+        }
+
         H.pipe(
             this.#checkAtomExists,
             H.curry(this.#checkValenceRespected)(elt),
             H.curry(this.#mutateCarbon)(elt),
-            H.curry(this.#updateAtomsLinkedTo)(elt, 'C'),
+            H.curry(this.#updateAtomsLinkedTo)(elt, aData.elt),
             this.#updateAtomIndex,
             H.curry(this.#updateBranchs)(c, b),
-            this.#success
-        )(this.atoms.getAtom('C', this.branchs.getAtom(b, c)?.id))
+            H.curry(this.#success)(aData.elt)
+        )(this.atoms.getAtom(aData.elt, aData.id))
     }
 
     #reverseMutation = arr => {
         const [c, b, elt] = arr
-        if ( !H.isAtom(this.atoms.getAtom(elt, this.branchs.getAtom(b, c)?.id)) ) return
+        const aData = this.branchs.getAtom(b, c)
+        if ( !H.isAtom(this.atoms.getAtom(elt, aData.id)) ) return
 
         H.pipe( 
-            H.curry(this.#mutateCarbon)('C'), 
-            H.curry(this.#updateAtomsLinkedTo)('C', elt) 
-        )(this.atoms.getAtom(elt, this.branchs.getAtom(b, c)?.id))
+            H.curry(this.#mutateCarbon)(aData.elt), 
+            H.curry(this.#updateAtomsLinkedTo)(aData.elt, elt) 
+        )(this.atoms.getAtom(elt, aData.id))
     }
 
-    execute = arr => {
-        this.validations.checkValidation(arr)
-        this.#handleMutation(arr)
-    }
+    execute = arr => this.#handleMutation(arr) 
 
-    undo = arr => {
-        if ( !this.validations.isInputValid(arr) ) return
-        this.#reverseMutation(arr)
-    }
+    undo = arr => this.#reverseMutation(arr)
 }
 
 class MutateAtomId {
@@ -523,11 +527,10 @@ class AddAtomCommand {
         this.branchs = branchs
         this.atoms = atoms
         this.id = 0
-        this.validations = new Validation( [H.curry(H.isCorrectNumberOfArgs)(3), H.isArray] )
     }
 
     #checkAtomExists = a => {
-        if (!H.isAtom(a)) { throw new InvalidBond('Atom is inexistant') }
+        if (!H.isAtom(a)) { throw new InvalidBond(`${a.element}${a.id} is inexistant`) }
         return a
     }
 
@@ -543,80 +546,70 @@ class AddAtomCommand {
 
     #addToAtoms = a => { this.atoms.add(a); return a }
 
+    #purgeId = () => this.id = 0
+
     #success = (a, newA) => console.log( `${newA.element}${newA.id} has been added to ${a.elt}${a.id}` )
 
     #removeFromAtoms = a => this.atoms.remove(a)
 
     #handleAddition = arr => {
+        console.log(`\nCOMMAND: .add(${arr})`)
         const [ c, b, elt ] = arr
         const branchAtom = this.branchs.getAtom(b, c)
         H.pipe(
             this.#checkAtomExists,
-            this.#setId,
             H.curry(this.#linkAtomToNewElement)(elt),
+            this.#setId,
             this.#addToAtoms,
             H.curry(this.#success)(branchAtom)
         )(this.atoms.getAtom(branchAtom?.elt, branchAtom?.id))
+        this.#purgeId()
     }
 
     #reverseAddition = arr => {
         const [c, b, elt] = arr
         const [carbon, atom] = [this.atoms.getAtom('C', this.branchs.getAtom(b, c)?.id), this.atoms.getAtom(elt, this.id)]
-
         if ( !H.isAtom(carbon) || !H.isAtom(atom) ) return
         this.#removeNewElementFromCarbonLinks(elt, this.id, carbon)
         this.#removeFromAtoms(atom)
     }
 
-    execute = arr => {
-        this.validations.checkValidation(arr)
-        this.#handleAddition(arr)
-    }
+    execute = arr => this.#handleAddition(arr) 
 
-    undo = arr => {
-        if( !this.validations.isInputValid(arr) ) return
-        this.#reverseAddition(arr)
-    }
+    undo = arr => this.#reverseAddition(arr) 
 }
 
 class AddChainCommand extends AddBranchCommand {
     constructor (branchs, atoms, cBranchs) {
         super(branchs, atoms)
         this.cBranchs = cBranchs
-        this.validations = new Validation(
-            [
-                H.isArray,
-                H.validationWithFilteredInput(this.filterPos, H.isAtom),
-                H.validationWithFilteredInput(this.filterElements, H.isArrOfEltValid)
-            ]
-        )
     }
-
-    filterPos = arr => {
-        const pos = [...arr].splice(0, 2)
-        return this.atoms.getAtom('C', this.cBranchs.getAtom(arr[1], arr[0])?.id)
-    }
-
-    filterElements = arr => [...arr].splice(2)
 
     createAtom = elt => new Atom(elt, this.atoms.getLastId() + 1 )
     success = a => console.log(`Atom ${a.element} was created with id ${a.id} in chain ${this.branchs.length}`)
 
     linkToCarbon = pos => {
+        const aData = this.cBranchs.getAtom(pos[1], pos[0])
         const [ c, x ] = [ 
-            this.atoms.getAtom('C', this.cBranchs.getAtom(pos[1], pos[0]).id), 
+            this.atoms.getAtom(aData.elt, aData.id), 
             this.atoms.getAtom(this.branch[1].elt, this.branch[1].id ) 
         ]
         H.linkAtoms( c, x ) 
     }
 
+    chainSuccess = pos => {
+        const cDatas = this.cBranchs.getAtom(pos[1], pos[0])
+        console.log(`Chain ${this.branchs.length - 1} is connected to ${cDatas.elt}${cDatas.id}`)
+    }
+
     execute = arr => {
-        this.validations.checkValidation(arr)
+        console.log(`\nCOMMAND: .addChaining(${arr})`)
         const [ pos, elements ] = [ arr.splice(0, 2), arr]
         this.handleAddingBranch(elements)
         this.linkToCarbon(pos)
         this.addToBranchs()
-        this.purgeBranch();
+        this.purgeBranch()
+        this.chainSuccess(pos)
     }
 }
 
@@ -660,27 +653,33 @@ class LockMoleculeCommand {
     openSuccess = h => console.log(`H.${h.id} has been removed from molecule`)
 
     execute = () => {
+        console.log(`\nCOMMAND: .closer()`)
         this.atoms.safe.forEach( 
             a => {
+                if ( a.getFreeSpots() <= 0 ) return
                 H.pipe(
                     H.map(this.createAtom),
                     H.map(this.addToAtoms),
                     H.map(this.addToBranch),
                     H.map( H.curry(this.linkAtom)(a) ),
-                    H.forEach( H.curry(this.closeSuccess)(a) )
+                    H.forEach( h => h )
                 )( [...Array(a.getFreeSpots())] )
             }
         )
+        console.log('Molecule LOCKED')
     }
 
     undo = () => {
+        console.log(`\nCOMMAND: .unlock()`)
         H.pipe(
             H.map(this.removeAllLinks),
             H.map(this.removeHydrogen),
-            H.forEach(this.openSuccess)
+            H.forEach( h => h )
         )( [...this.atoms.safe].filter(a => a.element === 'H') )
+
         this.branchs.removeHydrogenFromBranchs()
         this.atoms.setContinuousId(this.branchs)
+        console.log('Molecule UNLOCKED')
     }
 }
 
@@ -703,7 +702,6 @@ class Atom {
         this.validations = new Validation(
             [
                 H.isAtom,
-                //this.#isValenceRespected,
                 this.#isDifferentAtom
             ]
         )
@@ -753,8 +751,6 @@ class Atom {
     }
 
     getFreeSpots = () => this.valence - this.linkedTo.total
-
-    #isValenceRespected = a => this.linkedTo.total + 1 <= this.valence
 
     #isDifferentAtom = a => a.id !== this.id || a.element !== this.element
 
@@ -936,4 +932,6 @@ class Molecule {
     }
 }
 
-module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, InvalidInput }
+module.exports = { Molecule, InvalidBond, LockedMolecule, UnlockedMolecule, EmptyMolecule, ElementUnknown }
+
+
