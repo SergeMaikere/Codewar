@@ -79,6 +79,48 @@ class InvalidInput extends Error {
     }
 }
 
+/**
+ * Optional class for input a validation.
+ *
+ */
+class Validation {
+
+    constructor (_validations) {
+        this.validation = _validations
+    }
+
+    isInputValid = input => this.validation.every( f => f(input) )
+
+    checkValidation = input => { 
+        if (!this.isInputValid(input)) { throw new InvalidInput('Unacceptable Input. Try again.') } 
+    }
+}
+
+
+
+// CONSTANTS AND HELPER
+
+/**
+ * This class contains the contant values
+ *
+ */
+class Constant {
+
+    static VALID_ATOMS = {
+        'H': {valence: 1, weight: 1.0},    
+        'B': {valence: 3, weight: 10.8},    
+        'C': {valence: 4, weight: 12.0},     
+        'N': {valence: 3, weight: 14.0},
+        'O': {valence: 2, weight: 16.0},     
+        'F': {valence: 1, weight: 19.0},     
+        'Mg': {valence: 2, weight: 24.3},     
+        'P': {valence: 3, weight: 31.0},     
+        'S': {valence: 2, weight: 32.1},     
+        'Cl': {valence: 1, weight: 35.5},     
+        'Br': {valence: 1, weight: 80.0}
+    }
+}
+
 
 /**
  * Helper static class
@@ -244,9 +286,24 @@ class H {
         const i = arrOfElt.indexOf( arrOfElt.find(str => str === elt) )
         return i !== - 1 ? arrOfElt.splice( i , 1 ) : []
     }
+
+    /**
+     * Sort array of elements alphabeticaly
+     * 
+     * @return    Array    ordered array of elements
+     */
+    static sort = arrOfElt => arrOfElt.sort( (a,b) => a.localeCompare(b) )
+
+    static moveHToLastPos = arrOfElt => {
+        const indexOfH = arrOfElt.indexOf('H')
+        if ( indexOfH !== -1 ) arrOfElt.push( arrOfElt.splice(indexOfH, 1)[0] )
+        return arrOfElt;
+    }
 }
 
 
+
+// MOLECULE'S INDEXES
 
 /**
  * Great repository of atoms in the molecule
@@ -295,12 +352,6 @@ class AtomsOfMolecule {
 
 
     /**
-     * Sort the atoms alphabeticaly for the molecule's formula
-     */
-    #sortAlphabeticaly = arrOfElt => arrOfElt.sort()
-
-
-    /**
      * Add numbers to the molecule's formula
      */
     #setNumbersByAtoms = arrOfElt => arrOfElt.map( 
@@ -312,7 +363,7 @@ class AtomsOfMolecule {
 
     getFormula = () => {
         return H.pipe(
-            this.#sortAlphabeticaly,
+            H.sort,
             H.curry(H.setEltFront)(['C','H','O']),
             this.#setNumbersByAtoms,
         )( Object.keys(this.atomIndex) ).join('')
@@ -375,7 +426,10 @@ class LinksOfAtom {
 }
 
 
-
+/**
+ * Great index in every branchs/chains in the molecule
+ *
+ */
 class BranchsOfMolecule {
     constructor (atoms) {
         this.atoms = atoms
@@ -408,23 +462,9 @@ class BranchsOfMolecule {
 }
 
 
-/**
- * Optional class for input a validation.
- *
- */
-class Validation {
 
-    constructor (_validations) {
-        this.validation = _validations
-    }
 
-    isInputValid = input => this.validation.every( f => f(input) )
-
-    checkValidation = input => { 
-        if (!this.isInputValid(input)) { throw new InvalidInput('Unacceptable Input. Try again.') } 
-    }
-}
-
+// COMMANDS OF THE MOLECULE
 
 /**
  * Class handles creation and removal of branches
@@ -878,6 +918,10 @@ class LockMoleculeCommand {
 }
 
 
+
+
+// BODIES
+
 /**
  * This class describes a null atom (returned when atom dosen't exists)
  *
@@ -890,6 +934,7 @@ class NullAtom {
 
     toString = () => console.log(`Atom not found`)
 }
+
 
 
 /**
@@ -911,37 +956,22 @@ class Atom {
         )
     }
 
-    static VALID_ATOMS = {
-        'H': {valence: 1, weight: 1.0},    
-        'B': {valence: 3, weight: 10.8},    
-        'C': {valence: 4, weight: 12.0},     
-        'N': {valence: 3, weight: 14.0},
-        'O': {valence: 2, weight: 16.0},     
-        'F': {valence: 1, weight: 19.0},     
-        'Mg': {valence: 2, weight: 24.3},     
-        'P': {valence: 3, weight: 31.0},     
-        'S': {valence: 2, weight: 32.1},     
-        'Cl': {valence: 1, weight: 35.5},     
-        'Br': {valence: 1, weight: 80.0}
-    }
-
-
     get element () { return this._element }
     set element (v) {
-        if (!Atom.VALID_ATOMS[v]) throw new ElementUnknown('Unless you are the new Mendeliev, try again')
+        if (!Constant.VALID_ATOMS[v]) throw new ElementUnknown('Unless you are the new Mendeliev, try again')
         this._element = v
     }
 
     get valence () { return this._valence }
     set valence (v) { 
-        if (!Atom.VALID_ATOMS[v]) throw new ElementUnknown('Unless you are the new Mendeliev, try again')
-        this._valence = Atom.VALID_ATOMS[v].valence 
+        if (!Constant.VALID_ATOMS[v]) throw new ElementUnknown('Unless you are the new Mendeliev, try again')
+        this._valence = Constant.VALID_ATOMS[v].valence 
     }
 
     get weight () { return this._weight }
     set weight (v) { 
-        if (!Atom.VALID_ATOMS[v]) throw new ElementUnknown('Unless you are the new Mendeliev, try again')
-        this._weight = Atom.VALID_ATOMS[v].weight
+        if (!Constant.VALID_ATOMS[v]) throw new ElementUnknown('Unless you are the new Mendeliev, try again')
+        this._weight = Constant.VALID_ATOMS[v].weight
     }
 
     linkTo = a => {
@@ -963,37 +993,24 @@ class Atom {
 
     #isDifferentAtom = a => a.id !== this.id || a.element !== this.element
 
-    /**
-     * Sort array of elements alphabeticaly
-     * 
-     * @return    Array    ordered array of elements
-     */
-    #sort = arrOfElt => arrOfElt.sort( (a,b) => a.localeCompare(b) )
+    #formatLinkedToElt = arrOfElt => arrOfElt.reduce(
+        (acc, elt) => acc.concat(
+            [...this.linkedTo.links[elt]]
+            .sort((a,b) => a - b)
+            .map(id => `${elt}${elt !== 'H' ? id : ''}`) 
+        ), [] 
+    )
 
     #formatLinkedTo = () => H.pipe( 
-        this.#sort,
+        H.sort,
         H.curry(H.setEltFront)(['C','O']),
-        this.#moveHToLastPos, 
+        H.moveHToLastPos, 
         this.#formatLinkedToElt 
     )(Object.keys(this.linkedTo.links) ).join(',')
 
-    #formatLinkedToElt = arrOfElt => arrOfElt
-        .reduce(
-            (acc, elt) => acc.concat(
-                [...this.linkedTo.links[elt]]
-                .sort((a,b) => a - b)
-                .map(id => `${elt}${elt !== 'H' ? id : ''}`) 
-            ), [] 
-        )
-
-    #moveHToLastPos = arrOfElt => {
-        const indexOfH = arrOfElt.indexOf('H')
-        if ( indexOfH !== -1 ) arrOfElt.push( arrOfElt.splice(indexOfH, 1)[0] )
-        return arrOfElt;
-    }
-
     toString = () => `Atom(${this.element}.${this.id}${ !this.linkedTo.isLonely() ? ': ' + this.#formatLinkedTo() : '' })`
 }
+
 
 
 /**
@@ -1138,6 +1155,11 @@ class Molecule {
         return this
     }
 
+
+    /**
+     * (Optional )Displays the content of the molecule
+     *
+     */
     display = () => {
         console.log('\r\n')
         console.log('DISPLAY')
